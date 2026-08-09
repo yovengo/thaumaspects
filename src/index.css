@@ -1,0 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Uncial+Antiqua&display=swap');
+
+:root { font-family: Manrope, Arial, sans-serif; color: #eee6ce; background: #16120e; font-synthesis: none; text-rendering: optimizeLegibility; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -15%, #5b4030 0, #211812 37%, #12100d 75%); }
+button, select, input { font: inherit; }
+button { cursor: pointer; }
