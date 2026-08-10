@@ -41,7 +41,7 @@ footer { padding: 22px 0 4px; color: #887967; font-size: 11px; text-align: cente
 .research-board { padding: 18px; }.board-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 18px; }.board-palette { display: flex; flex-direction: column; min-height: 0; padding: 14px; border: 1px solid #5d4731; background: rgba(20,15,12,.65); }.board-palette .eyebrow { margin-bottom: 4px; }.board-palette h2 { margin: 0; color: #eddaad; font-size: 15px; }.board-palette input { width: 100%; margin-top: 13px; padding: 9px; border: 1px solid #624c35; color: #e9ddc6; background: #291e16; font-size: 11px; }.palette-help { margin: 9px 0; color: #988973; font-size: 10px; line-height: 1.4; }.palette-list { display: grid; grid-template-columns: 1fr; gap: 3px; max-height: 385px; overflow: auto; padding-right: 3px; }.palette-list button { display: grid; grid-template-columns: 29px 1fr; grid-template-rows: 1fr 1fr; align-items: center; min-height: 38px; padding: 3px; border: 1px solid transparent; color: #dacbae; background: transparent; cursor: grab; text-align: left; }.palette-list button:hover { border-color: #926a3d; background: #302218; }.palette-list .aspect-icon { width: 26px; height: 26px; grid-row: span 2; }.palette-list span { overflow: hidden; font-size: 10px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }.palette-list small { color: #8f8068; font-size: 8px; }.board-main { min-width: 0; }.board-main .board-title { margin-bottom: 11px; }.board-main .board-title h2 { font-size: 17px; }.board-main .board-title > span { max-width: 265px; text-align: right; }.board-grid { grid-template-columns: repeat(8, minmax(48px, 63px)); justify-content: center; gap: 2px 3px; max-width: 565px; padding: 7px 31px 30px 7px; border: 0; background: transparent; }.board-cell { aspect-ratio: 1.15 / 1; min-height: 46px; border: 0; background: rgba(66,48,29,.75); clip-path: polygon(25% 2%, 75% 2%, 99% 50%, 75% 98%, 25% 98%, 1% 50%); }.board-cell::after { inset: 3px; border-color: rgba(186,142,79,.28); clip-path: inherit; }.board-cell:nth-child(16n + 9), .board-cell:nth-child(16n + 10), .board-cell:nth-child(16n + 11), .board-cell:nth-child(16n + 12), .board-cell:nth-child(16n + 13), .board-cell:nth-child(16n + 14), .board-cell:nth-child(16n + 15), .board-cell:nth-child(16n + 16) { transform: translateX(50%); }.board-cell.has-aspect { padding: 4px 7px; border: 0; background: radial-gradient(circle, rgba(180,128,52,.29), rgba(37,26,17,.98)); }.board-cell.has-aspect .aspect-icon { width: clamp(25px, 3vw, 36px); height: clamp(25px, 3vw, 36px); }.board-cell.has-aspect b { font-size: 8px; }.board-cell.has-aspect small { font-size: 7px; }.board-cell.is-selected { filter: drop-shadow(0 0 8px #ecba62); box-shadow: none; }.board-cell.is-route { filter: drop-shadow(0 0 5px #b47732); box-shadow: none; }.board-cell.is-blocked { display: grid; place-items: center; background: repeating-linear-gradient(135deg, #211914 0 5px, #38291c 5px 8px); cursor: not-allowed; }.blocked-mark { color: #9b6550; font-size: 17px; }.remove-cell { top: 8px; right: 12px; }.board-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; max-width: 620px; margin: 4px auto 0; padding-top: 12px; border-top: 1px solid #4d3929; }.board-actions .selected-aspects { display: flex; gap: 5px; min-height: 37px; margin: 0; }.board-actions .selected-aspects > div { grid-template-columns: 20px 24px 1fr; min-width: 106px; padding: 3px; }.board-actions .selected-aspects .aspect-icon { width: 21px; height: 21px; }.board-actions .selected-aspects > span { font-size: 10px; }.board-actions > p { grid-column: 1 / -1; order: -1; margin: 0; color: #a79477; font-size: 10px; }.board-actions .find-button { width: auto; margin: 0; white-space: nowrap; }.board-actions .clear-map, .obstacle-button { width: auto; margin: 0; padding: 9px 10px; white-space: nowrap; }.obstacle-button { border: 1px solid #705037; color: #c9ad7e; background: transparent; font-size: 10px; }.obstacle-button:hover { border-color: #b98140; color: #ecd19b; }
 @media (max-width: 760px) { .app-shell { width: min(100% - 20px, 1180px); padding-top: 10px; }.hero-panel { min-height: 145px; padding: 25px 20px; }.hero-rune { font-size: 55px; } h1 { font-size: 24px; }.intro { font-size: 13px; }.workspace { grid-template-columns: 1fr; }.inventory-header { align-items: flex-start; flex-direction: column; }.aspect-grid { grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); }.search-panel,.result-panel,.inventory-panel,.board-summary,.research-board { padding: 18px; }.board-title { align-items: flex-start; flex-direction: column; gap: 8px; }.board-grid { grid-template-columns: repeat(9, minmax(34px, 1fr)); gap: 3px; padding: 5px; }.board-cell { min-height: 34px; }.board-cell.has-aspect { padding: 2px; }.board-cell.has-aspect b, .board-cell.has-aspect small { display: none; }.board-cell::after { inset: 2px; }.cell-order { top: 1px; left: 3px; font-size: 7px; } }
 
-/* Exact pointy-top hex layout. Cell coordinates are calculated in App.tsx. */
+/* Exact flat-top hex layout. Cell coordinates are calculated in App.tsx. */
 .research-board .board-grid {
   position: static;
   display: flex;
@@ -78,19 +78,19 @@ footer { padding: 22px 0 4px; color: #887967; font-size: 11px; text-align: cente
 .research-board .board-cell:nth-child(n) {
   position: absolute;
   z-index: 2;
-  width: 46px;
+  width: 61px;
   height: 53px;
   min-height: 0;
   padding: 3px;
   transform: none;
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   border: 0;
   background: #3c2c1d;
 }
 .research-board .board-cell::after {
   z-index: 0;
   inset: 1px;
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   border-color: rgba(211, 169, 102, .3);
 }
 .research-board .cell-order {
@@ -110,7 +110,7 @@ footer { padding: 22px 0 4px; color: #887967; font-size: 11px; text-align: cente
   padding: 3px;
   background: radial-gradient(circle, rgba(180, 128, 52, .34), #241a12 76%);
 }
-.research-board .board-cell.has-aspect .aspect-icon { width: 32px; height: 32px; }
+.research-board .board-cell.has-aspect .aspect-icon { width: 38px; height: 38px; }
 .research-board .board-cell.is-blocked { background: repeating-linear-gradient(135deg, #211914 0 4px, #483322 4px 7px); }
 .research-board .remove-cell { top: 7px; right: 7px; }
 .research-board .board-actions {

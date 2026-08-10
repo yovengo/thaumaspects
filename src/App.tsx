@@ -15,7 +15,14 @@ const addonMap = addonDictionary as unknown as Record<string, AddonDefinition>
 
 const versions = Object.keys(versionMap)
 const latestVersion = '5.1.3'
+const versionStorageKey = 'thaumaspects.version'
 const addonEntries = Object.entries(addonMap)
+
+function getStoredVersion() {
+  if (typeof window === 'undefined') return latestVersion
+  const storedVersion = window.localStorage.getItem(versionStorageKey)
+  return storedVersion && storedVersion in versionMap ? storedVersion : latestVersion
+}
 
 const label = (aspect: string) => `${aspectNames[aspect] ?? aspect}`.replace(/^./, (letter) => letter.toUpperCase())
 const icon = (aspect: string, muted = false) => `/aspects/${muted ? 'mono' : 'color'}/${aspectNames[aspect]}.png`
@@ -112,24 +119,39 @@ function VersionSelect({ value, onChange }: { value: string; onChange: (version:
 }
 
 const defaultBoardSize = 9
-const hexWidth = 46
+const hexWidth = 61
 const hexHeight = 53
-const hexGap = 3
-const hexColumnStep = hexWidth + hexGap
-const hexRowStep = 40 + hexGap
+const hexGap = 6
+const hexColumnStep = 46 + hexGap
+const hexRowStep = hexHeight + hexGap
 const cellId = (row: number, column: number) => `${row}-${column}`
 const parseCellId = (id: string) => id.split('-').map(Number) as [number, number]
 
+function isBoardCell(row: number, column: number, boardSize: number) {
+  const radius = Math.floor(boardSize / 2)
+  const centerAxialRow = radius - Math.floor((radius - (radius & 1)) / 2)
+  const axialColumn = column - radius
+  const axialRow = row - Math.floor((column - (column & 1)) / 2) - centerAxialRow
+  return Math.max(Math.abs(axialColumn), Math.abs(axialRow), Math.abs(-axialColumn - axialRow)) <= radius
+}
+
+function getBoardCells(boardSize: number) {
+  return Array.from({ length: boardSize * boardSize }, (_, index) => ({
+    row: Math.floor(index / boardSize),
+    column: index % boardSize,
+  })).filter(({ row, column }) => isBoardCell(row, column, boardSize))
+}
+
 function getBoardNeighbors(id: string, boardSize: number) {
   const [row, column] = parseCellId(id)
-  const directions = row % 2 === 0
-    ? [[0, -1], [0, 1], [-1, -1], [-1, 0], [1, -1], [1, 0]]
-    : [[0, -1], [0, 1], [-1, 0], [-1, 1], [1, 0], [1, 1]]
+  const directions = column % 2 === 0
+    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]
 
   return directions.map(([rowOffset, columnOffset]) => cellId(row + rowOffset, column + columnOffset))
     .filter((next) => {
       const [nextRow, nextColumn] = parseCellId(next)
-      return nextRow >= 0 && nextRow < boardSize && nextColumn >= 0 && nextColumn < boardSize
+      return nextRow >= 0 && nextRow < boardSize && nextColumn >= 0 && nextColumn < boardSize && isBoardCell(nextRow, nextColumn, boardSize)
     })
 }
 
@@ -182,9 +204,10 @@ function findBoardRoute(start: string, finish: string, length: number, occupied:
 }
 
 function App() {
-  const [version, setVersion] = useState(latestVersion)
+  const initialVersion = getStoredVersion()
+  const [version, setVersion] = useState(initialVersion)
   const catalog = useMemo(() => getCatalog(version), [version])
-  const [enabled, setEnabled] = useState<Set<string>>(() => defaultEnabled(getCatalog(latestVersion)))
+  const [enabled, setEnabled] = useState<Set<string>>(() => defaultEnabled(getCatalog(initialVersion)))
   const [activeAddons, setActiveAddons] = useState<Set<string>>(() => new Set(['gt']))
   const [from, setFrom] = useState('air')
   const [to, setTo] = useState('air')
@@ -203,6 +226,7 @@ function App() {
 
   const changeVersion = (nextVersion: string) => {
     const nextCatalog = getCatalog(nextVersion)
+    window.localStorage.setItem(versionStorageKey, nextVersion)
     setVersion(nextVersion)
     setEnabled(defaultEnabled(nextCatalog))
     setActiveAddons(new Set(['gt']))
@@ -309,7 +333,7 @@ function App() {
     setObstacles(new Set())
     setSelectedCells([])
     setBoardRoute(null)
-    setBoardMessage(`Map resized to ${nextSize} × ${nextSize}. Place the aspects again.`)
+    setBoardMessage(`Map resized to a radius of ${Math.floor(nextSize / 2)} rings. Place the aspects again.`)
   }
 
   return (
@@ -350,14 +374,12 @@ function App() {
         </aside> : null}
       </section>
 
-      {mode === 'board' && <section className="panel research-board" aria-label="Research map"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Palette</p><h2>Aspects</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search aspects for the map" /><p className="palette-help">Drag an aspect onto a free cell.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Knowledge infusion</p><h2>Research map</h2></div></div><label className="board-size">Size: <strong>{boardSize} × {boardSize}</strong><input type="range" min="5" max="15" value={boardSize} onChange={(event) => changeBoardSize(Number(event.target.value))} /></label><span>{editingObstacles ? 'Click empty cells to place obstacles' : 'Select two aspects, then build the chain'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth + hexColumnStep / 2, height: (boardSize - 1) * hexRowStep + hexHeight }}>{boardRoute && <svg className="board-route-lines" aria-hidden="true"><polyline points={boardRoute.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + (row % 2) * hexColumnStep / 2 + hexWidth / 2},${row * hexRowStep + hexHeight / 2}` }).join(' ')} /></svg>}{Array.from({ length: boardSize * boardSize }, (_, index) => {
-        const row = Math.floor(index / boardSize)
-        const column = index % boardSize
+      {mode === 'board' && <section className="panel research-board" aria-label="Research map"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Palette</p><h2>Aspects</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search aspects for the map" /><p className="palette-help">Drag an aspect onto a free cell.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Knowledge infusion</p><h2>Research map</h2></div></div><label className="board-size">Map radius: <strong>{Math.floor(boardSize / 2)} rings</strong><input type="range" min="3" max="7" value={Math.floor(boardSize / 2)} onChange={(event) => changeBoardSize(Number(event.target.value) * 2 + 1)} /></label><span>{editingObstacles ? 'Click empty cells to place obstacles' : 'Select two aspects, then build the chain'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth, height: (boardSize - 1) * hexRowStep + hexHeight + hexRowStep / 2 }}>{boardRoute && <svg className="board-route-lines" aria-hidden="true"><polyline points={boardRoute.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + hexWidth / 2},${row * hexRowStep + (column % 2) * hexRowStep / 2 + hexHeight / 2}` }).join(' ')} /></svg>}{getBoardCells(boardSize).map(({ row, column }) => {
         const id = cellId(row, column)
         const aspect = board[id]
         const routeIndex = boardRoute?.indexOf(id) ?? -1
         const blocked = obstacles.has(id)
-        return <div key={id} style={{ left: column * hexColumnStep + (row % 2) * hexColumnStep / 2, top: row * hexRowStep }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeIndex >= 0 ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoute(null) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeIndex >= 0 && <span className="cell-order">{routeIndex + 1}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoute(null) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
+        return <div key={id} style={{ left: column * hexColumnStep, top: row * hexRowStep + (column % 2) * hexRowStep / 2 }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeIndex >= 0 ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoute(null) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeIndex >= 0 && <span className="cell-order">{routeIndex + 1}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoute(null) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
       })}</div></div><div className="board-actions" aria-live="polite"><div className="selected-aspects">{selectedCells.length === 0 && <span>Select start and end aspects</span>}{selectedCells.map((id, index) => <div key={id}><b>{index === 0 ? 'From' : 'To'}</b><AspectIcon aspect={board[id]} /><span>{label(board[id])}</span></div>)}</div><p>{boardMessage}</p><button className="obstacle-button" type="button" onClick={() => setEditingObstacles((current) => !current)}>{editingObstacles ? 'Done editing obstacles' : 'Edit obstacles'}</button><button className="find-button" type="button" onClick={buildBoardPath}>Build chain <span>✦</span></button><button className="clear-map" type="button" onClick={() => { setBoard({}); setObstacles(new Set()); setSelectedCells([]); setBoardRoute(null); setBoardMessage('Map cleared. Drag new aspects onto it.') }}>Clear map</button></div></div></div></section>}
 
       <section className="panel inventory-panel">
