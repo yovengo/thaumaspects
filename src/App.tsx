@@ -91,8 +91,8 @@ function AspectSelect({ caption, value, aspects, onChange }: { caption: string; 
 
   return <div className="field-label aspect-picker"><span>{caption}</span>
     <button className="aspect-picker-trigger" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}><AspectIcon aspect={value} /><span>{label(value)}</span><small>{value}</small><b aria-hidden="true">⌄</b></button>
-    {open && <div className="aspect-picker-menu"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск аспекта…" autoFocus aria-label={`Поиск аспекта «${caption}»`} />
-      <div className="aspect-picker-options" role="listbox">{matches.map((aspect) => <button type="button" role="option" aria-selected={aspect === value} key={aspect} onClick={() => selectAspect(aspect)}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}{matches.length === 0 && <p>Ничего не найдено</p>}</div>
+    {open && <div className="aspect-picker-menu"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aspects…" autoFocus aria-label={`Search aspects for ${caption}`} />
+      <div className="aspect-picker-options" role="listbox">{matches.map((aspect) => <button type="button" role="option" aria-selected={aspect === value} key={aspect} onClick={() => selectAspect(aspect)}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}{matches.length === 0 && <p>No aspects found</p>}</div>
     </div>}
   </div>
 }
@@ -105,7 +105,7 @@ function VersionSelect({ value, onChange }: { value: string; onChange: (version:
     setOpen(false)
   }
 
-  return <div className="field-label version-picker"><span>Версия Thaumcraft</span>
+  return <div className="field-label version-picker"><span>Thaumcraft version</span>
     <button className="version-picker-trigger" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span>{value}</span><b aria-hidden="true">⌄</b></button>
     {open && <div className="version-picker-menu" role="listbox">{versions.map((item) => <button type="button" role="option" aria-selected={item === value} key={item} onClick={() => chooseVersion(item)}>{item}</button>)}</div>}
   </div>
@@ -195,7 +195,7 @@ function App() {
   const [board, setBoard] = useState<Record<string, string>>({})
   const [selectedCells, setSelectedCells] = useState<string[]>([])
   const [boardRoute, setBoardRoute] = useState<string[] | null>(null)
-  const [boardMessage, setBoardMessage] = useState('Перетащите аспекты на карту и выберите два из них.')
+  const [boardMessage, setBoardMessage] = useState('Drag aspects onto the map, then select two of them.')
   const [obstacles, setObstacles] = useState<Set<string>>(new Set())
   const [editingObstacles, setEditingObstacles] = useState(false)
   const [paletteQuery, setPaletteQuery] = useState('')
@@ -214,7 +214,7 @@ function App() {
     setSelectedCells([])
     setBoardRoute(null)
     setObstacles(new Set())
-    setBoardMessage('Перетащите аспекты на карту и выберите два из них.')
+    setBoardMessage('Drag aspects onto the map, then select two of them.')
   }
 
   const toggleAddon = (id: string) => {
@@ -245,7 +245,7 @@ function App() {
     setBoard((previous) => ({ ...previous, [target]: aspect }))
     setSelectedCells((previous) => previous.filter((id) => id !== target))
     setBoardRoute(null)
-    setBoardMessage('Выберите начальный и конечный аспекты кликом по карте.')
+    setBoardMessage('Select the starting and ending aspects on the map.')
   }
 
   const moveAspect = (source: string, target: string) => {
@@ -258,37 +258,37 @@ function App() {
     })
     setSelectedCells((previous) => previous.map((id) => id === source ? target : id === target ? source : id))
     setBoardRoute(null)
-    setBoardMessage('Аспект перемещён. Выберите начало и конец или продолжайте редактирование.')
+    setBoardMessage('Aspect moved. Select endpoints or continue editing.')
   }
 
   const selectBoardCell = (id: string) => {
     if (!board[id]) return
     setBoardRoute(null)
     setSelectedCells((previous) => previous.includes(id) ? previous.filter((item) => item !== id) : [...previous.slice(-1), id])
-    setBoardMessage('Выберите второй аспект или постройте цепочку.')
+    setBoardMessage('Select the second aspect or build a chain.')
   }
 
   const buildBoardPath = () => {
     if (selectedCells.length !== 2) {
-      setBoardMessage('Выберите на карте ровно два аспекта: начало и конец цепочки.')
+      setBoardMessage('Select exactly two aspects on the map: the start and end of the chain.')
       return
     }
     const [start, finish] = selectedCells
     const occupied = new Set([...Object.keys(board).filter((id) => id !== start && id !== finish), ...obstacles])
     const shortestRoute = findShortestBoardRoute(start, finish, occupied, boardSize)
     if (!shortestRoute) {
-      setBoardMessage('Между выбранными аспектами нет свободного прохода. Уберите часть преград или аспектов.')
+      setBoardMessage('There is no free route between the selected aspects. Remove some obstacles or aspects.')
       return
     }
     const requiredSpaces = Math.max(minSpaces, shortestRoute.length - 2)
     const path = findPath(board[start], board[finish], requiredSpaces, catalog.combinations, enabled)
     if (!path) {
-      setBoardMessage('Связь не найдена. Включите больше аспектов или измените условия.')
+      setBoardMessage('No connection found. Enable more aspects or change the conditions.')
       return
     }
     const route = findBoardRoute(start, finish, path.length, occupied, boardSize)
     if (!route) {
-      setBoardMessage('Не удалось аккуратно уложить найденную цепочку. Освободите несколько соседних ячеек или переместите крайние аспекты.')
+      setBoardMessage('The chain could not fit cleanly. Free up nearby cells or move the endpoint aspects.')
       return
     }
     setBoard((previous) => {
@@ -298,7 +298,7 @@ function App() {
     })
     setBoardRoute(route)
     setSelectedCells([])
-    setBoardMessage(`Цепочка построена: ${path.length - 2} промежуточных аспектов.`)
+    setBoardMessage(`Chain built with ${path.length - 2} intermediate aspects.`)
   }
 
   const used = result ? result.slice(1, -1).reduce<Record<string, number>>((total, aspect) => ({ ...total, [aspect]: (total[aspect] ?? 0) + 1 }), {}) : {}
@@ -309,7 +309,7 @@ function App() {
     setObstacles(new Set())
     setSelectedCells([])
     setBoardRoute(null)
-    setBoardMessage(`Карта изменена до ${nextSize} × ${nextSize}. Расставьте аспекты заново.`)
+    setBoardMessage(`Map resized to ${nextSize} × ${nextSize}. Place the aspects again.`)
   }
 
   return (
@@ -317,60 +317,60 @@ function App() {
       <header className="hero-panel">
         <div>
           <p className="eyebrow">Thaumcraft 4 · 5</p>
-          <h1>Помощник исследований</h1>
-          <p className="intro">Постройте цепочку аспектов для исследовательской заметки и исключите то, чего у вас ещё нет.</p>
+          <h1>Research Helper</h1>
+          <p className="intro">Build an aspect chain for your research note and exclude aspects you have not unlocked yet.</p>
         </div>
         <div className="hero-rune" aria-hidden="true">✦</div>
       </header>
 
-      <section className={`workspace ${mode === 'board' ? 'board-mode' : ''}`} aria-label="Поиск связи аспектов">
+      <section className={`workspace ${mode === 'board' ? 'board-mode' : ''}`} aria-label="Aspect connection search">
         <div className="panel search-panel">
-          <div className="panel-heading"><span className="step-number">1</span><div><h2>Настройте поиск</h2><p>Версия игры и два аспекта из заметки.</p></div></div>
-          <div className="mode-switch" role="group" aria-label="Режим работы"><button type="button" className={mode === 'quick' ? 'is-active' : ''} onClick={() => setMode('quick')}>Быстрый поиск</button><button type="button" className={mode === 'board' ? 'is-active' : ''} onClick={() => setMode('board')}>Карта исследований</button></div>
+          <div className="panel-heading"><span className="step-number">1</span><div><h2>Set up your search</h2><p>Your game version and two aspects from the note.</p></div></div>
+          <div className="mode-switch" role="group" aria-label="Work mode"><button type="button" className={mode === 'quick' ? 'is-active' : ''} onClick={() => setMode('quick')}>Quick search</button><button type="button" className={mode === 'board' ? 'is-active' : ''} onClick={() => setMode('board')}>Research map</button></div>
           <VersionSelect value={version} onChange={changeVersion} />
           {mode === 'quick' && <div className="aspect-selects">
-            <AspectSelect caption="От" value={from} aspects={catalog.aspects} onChange={setFrom} />
-            <button className="swap-aspects" type="button" onClick={() => { setFrom(to); setTo(from) }} aria-label="Поменять аспекты местами" title="Поменять местами">⇄</button>
-            <AspectSelect caption="До" value={to} aspects={catalog.aspects} onChange={setTo} />
+            <AspectSelect caption="From" value={from} aspects={catalog.aspects} onChange={setFrom} />
+            <button className="swap-aspects" type="button" onClick={() => { setFrom(to); setTo(from) }} aria-label="Swap aspects" title="Swap aspects">⇄</button>
+            <AspectSelect caption="To" value={to} aspects={catalog.aspects} onChange={setTo} />
           </div>}
-          <label className="field-label">Пустых ячеек между аспектами: <strong>{minSpaces}</strong>
+          <label className="field-label">Empty spaces between aspects: <strong>{minSpaces}</strong>
             <input type="range" min="1" max="10" value={minSpaces} onChange={(event) => setMinSpaces(Number(event.target.value))} />
           </label>
-          {mode === 'quick' ? <button className="find-button" type="button" onClick={runSearch}>Найти связь <span>→</span></button> : <div className="board-instructions"><strong>1.</strong> Перенесите два аспекта на карту ниже. <strong>2.</strong> Выберите их кликом. <strong>3.</strong> Постройте цепочку.</div>}
+          {mode === 'quick' ? <button className="find-button" type="button" onClick={runSearch}>Find connection <span>→</span></button> : <div className="board-instructions"><strong>1.</strong> Drag two aspects onto the map. <strong>2.</strong> Select them. <strong>3.</strong> Build the chain.</div>}
         </div>
 
         {mode === 'quick' ? <aside className="panel result-panel" aria-live="polite">
-          <div className="panel-heading"><span className="step-number">2</span><div><h2>Цепочка</h2><p>{searched ? (result ? 'Готово — перенесите аспекты в заметку.' : 'Подходящей цепочки не найдено.') : 'Здесь появится решение.'}</p></div></div>
+          <div className="panel-heading"><span className="step-number">2</span><div><h2>Chain</h2><p>{searched ? (result ? 'Done — transfer the aspects to your note.' : 'No suitable chain was found.') : 'Your solution will appear here.'}</p></div></div>
           {result && <>
             <ol className="path-list">{result.map((aspect, index) => <li key={`${aspect}-${index}`}><div className="path-aspect"><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></div>{index < result.length - 1 && <span className="path-arrow">↓</span>}</li>)}</ol>
-            <div className="used-aspects"><span>Использовано: {result.length - 2} шаг.</span><div>{Object.entries(used).map(([aspect, count]) => <span className="used-icon" key={aspect} title={`${label(aspect)}: ${count}`}><AspectIcon aspect={aspect} />{count}</span>)}</div></div>
+            <div className="used-aspects"><span>Used: {result.length - 2} steps</span><div>{Object.entries(used).map(([aspect, count]) => <span className="used-icon" key={aspect} title={`${label(aspect)}: ${count}`}><AspectIcon aspect={aspect} />{count}</span>)}</div></div>
           </>}
-          {searched && !result && <div className="empty-result">Включите больше аспектов или уменьшите число пустых ячеек.</div>}
-          {!searched && <div className="empty-result">Выберите начальный и конечный аспекты, затем нажмите «Найти связь».</div>}
+          {searched && !result && <div className="empty-result">Enable more aspects or reduce the number of empty spaces.</div>}
+          {!searched && <div className="empty-result">Select start and end aspects, then click “Find connection”.</div>}
         </aside> : null}
       </section>
 
-      {mode === 'board' && <section className="panel research-board" aria-label="Карта исследований"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Палитра</p><h2>Аспекты</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Поиск аспекта…" aria-label="Поиск аспекта для карты" /><p className="palette-help">Перетащите аспект на свободную ячейку.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Инфузия знаний</p><h2>Карта исследований</h2></div></div><label className="board-size">Размер: <strong>{boardSize} × {boardSize}</strong><input type="range" min="5" max="15" value={boardSize} onChange={(event) => changeBoardSize(Number(event.target.value))} /></label><span>{editingObstacles ? 'Нажимайте на пустые ячейки, чтобы поставить преграды' : 'Выберите два аспекта, затем постройте цепочку'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth + hexColumnStep / 2, height: (boardSize - 1) * hexRowStep + hexHeight }}>{boardRoute && <svg className="board-route-lines" aria-hidden="true"><polyline points={boardRoute.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + (row % 2) * hexColumnStep / 2 + hexWidth / 2},${row * hexRowStep + hexHeight / 2}` }).join(' ')} /></svg>}{Array.from({ length: boardSize * boardSize }, (_, index) => {
+      {mode === 'board' && <section className="panel research-board" aria-label="Research map"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Palette</p><h2>Aspects</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search aspects for the map" /><p className="palette-help">Drag an aspect onto a free cell.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Knowledge infusion</p><h2>Research map</h2></div></div><label className="board-size">Size: <strong>{boardSize} × {boardSize}</strong><input type="range" min="5" max="15" value={boardSize} onChange={(event) => changeBoardSize(Number(event.target.value))} /></label><span>{editingObstacles ? 'Click empty cells to place obstacles' : 'Select two aspects, then build the chain'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth + hexColumnStep / 2, height: (boardSize - 1) * hexRowStep + hexHeight }}>{boardRoute && <svg className="board-route-lines" aria-hidden="true"><polyline points={boardRoute.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + (row % 2) * hexColumnStep / 2 + hexWidth / 2},${row * hexRowStep + hexHeight / 2}` }).join(' ')} /></svg>}{Array.from({ length: boardSize * boardSize }, (_, index) => {
         const row = Math.floor(index / boardSize)
         const column = index % boardSize
         const id = cellId(row, column)
         const aspect = board[id]
         const routeIndex = boardRoute?.indexOf(id) ?? -1
         const blocked = obstacles.has(id)
-        return <div key={id} style={{ left: column * hexColumnStep + (row % 2) * hexColumnStep / 2, top: row * hexRowStep }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeIndex >= 0 ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoute(null) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeIndex >= 0 && <span className="cell-order">{routeIndex + 1}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoute(null) }} aria-label={`Убрать ${label(aspect)} с карты`}>×</button></>}</div>
-      })}</div></div><div className="board-actions" aria-live="polite"><div className="selected-aspects">{selectedCells.length === 0 && <span>Выберите начало и конец</span>}{selectedCells.map((id, index) => <div key={id}><b>{index === 0 ? 'От' : 'До'}</b><AspectIcon aspect={board[id]} /><span>{label(board[id])}</span></div>)}</div><p>{boardMessage}</p><button className="obstacle-button" type="button" onClick={() => setEditingObstacles((current) => !current)}>{editingObstacles ? 'Готово с преградами' : 'Редактировать преграды'}</button><button className="find-button" type="button" onClick={buildBoardPath}>Построить цепочку <span>✦</span></button><button className="clear-map" type="button" onClick={() => { setBoard({}); setObstacles(new Set()); setSelectedCells([]); setBoardRoute(null); setBoardMessage('Карта очищена. Перетащите новые аспекты.') }}>Очистить карту</button></div></div></div></section>}
+        return <div key={id} style={{ left: column * hexColumnStep + (row % 2) * hexColumnStep / 2, top: row * hexRowStep }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeIndex >= 0 ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoute(null) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeIndex >= 0 && <span className="cell-order">{routeIndex + 1}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoute(null) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
+      })}</div></div><div className="board-actions" aria-live="polite"><div className="selected-aspects">{selectedCells.length === 0 && <span>Select start and end aspects</span>}{selectedCells.map((id, index) => <div key={id}><b>{index === 0 ? 'From' : 'To'}</b><AspectIcon aspect={board[id]} /><span>{label(board[id])}</span></div>)}</div><p>{boardMessage}</p><button className="obstacle-button" type="button" onClick={() => setEditingObstacles((current) => !current)}>{editingObstacles ? 'Done editing obstacles' : 'Edit obstacles'}</button><button className="find-button" type="button" onClick={buildBoardPath}>Build chain <span>✦</span></button><button className="clear-map" type="button" onClick={() => { setBoard({}); setObstacles(new Set()); setSelectedCells([]); setBoardRoute(null); setBoardMessage('Map cleared. Drag new aspects onto it.') }}>Clear map</button></div></div></div></section>}
 
       <section className="panel inventory-panel">
-        <div className="inventory-header"><div className="panel-heading"><span className="step-number">3</span><div><h2>Доступные аспекты</h2><p>Нажмите на аспект, чтобы исключить его из поиска.</p></div></div><div className="inventory-actions"><button type="button" onClick={() => { setEnabled(new Set(catalog.aspects)); setActiveAddons(new Set(addonEntries.map(([id]) => id))) }}>Выбрать все</button><button type="button" onClick={() => { setEnabled(new Set()); setActiveAddons(new Set()) }}>Снять все</button></div></div>
+        <div className="inventory-header"><div className="panel-heading"><span className="step-number">3</span><div><h2>Available aspects</h2><p>Click an aspect to exclude it from the search.</p></div></div><div className="inventory-actions"><button type="button" onClick={() => { setEnabled(new Set(catalog.aspects)); setActiveAddons(new Set(addonEntries.map(([id]) => id))) }}>Select all</button><button type="button" onClick={() => { setEnabled(new Set()); setActiveAddons(new Set()) }}>Deselect all</button></div></div>
         <div className="addons">{addonEntries.map(([id, addon]) => <label key={id}><input type="checkbox" checked={activeAddons.has(id)} onChange={() => toggleAddon(id)} /> <span>{addon.name}</span></label>)}</div>
         <div className="aspect-grid">{catalog.aspects.map((aspect) => {
           const available = enabled.has(aspect)
           const parts = catalog.combinations[aspect]
-          return <button className={`aspect-card ${available ? '' : 'is-disabled'}`} type="button" key={aspect} onClick={() => setEnabled((previous) => { const next = new Set(previous); if (available) next.delete(aspect); else next.add(aspect); return next })} title={parts ? `${label(parts[0])} + ${label(parts[1])}` : 'Первичный аспект'}><AspectIcon aspect={aspect} muted={!available} /><span>{label(aspect)}</span><small>{aspect}</small>{parts && <em>{parts.map(label).join(' + ')}</em>}</button>
+          return <button className={`aspect-card ${available ? '' : 'is-disabled'}`} type="button" key={aspect} onClick={() => setEnabled((previous) => { const next = new Set(previous); if (available) next.delete(aspect); else next.add(aspect); return next })} title={parts ? `${label(parts[0])} + ${label(parts[1])}` : 'Primal aspect'}><AspectIcon aspect={aspect} muted={!available} /><span>{label(aspect)}</span><small>{aspect}</small>{parts && <em>{parts.map(label).join(' + ')}</em>}</button>
         })}</div>
       </section>
 
-      <footer>Данные и исходная логика: <a href="https://github.com/ythri/tcresearch/tree/gh-pages" target="_blank" rel="noreferrer">ythri/tcresearch</a>, лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</footer>
+      <footer>Data and original logic: <a href="https://github.com/ythri/tcresearch/tree/gh-pages" target="_blank" rel="noreferrer">ythri/tcresearch</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</footer>
     </main>
   )
 }
