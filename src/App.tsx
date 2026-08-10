@@ -172,35 +172,63 @@ function findShortestBoardRoute(start: string, finish: string, occupied: Set<str
   return null
 }
 
-function findBoardRoute(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number) {
-  const [startRow, startColumn] = parseCellId(start)
-  const [finishRow, finishColumn] = parseCellId(finish)
-  let attempts = 0
+function toCube(id: string) {
+  const [row, column] = parseCellId(id)
+  const x = column
+  const z = row - Math.floor((column - (column & 1)) / 2)
+  return [x, -x - z, z]
+}
 
-  const walk = (current: string, route: string[], visited: Set<string>): string[] | null => {
+function boardDistance(from: string, to: string) {
+  const a = toCube(from)
+  const b = toCube(to)
+  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]))
+}
+
+function routeTurns(route: string[]) {
+  let turns = 0
+  for (let index = 2; index < route.length; index += 1) {
+    const previous = toCube(route[index - 2])
+    const current = toCube(route[index - 1])
+    const next = toCube(route[index])
+    const firstDirection = current.map((value, axis) => value - previous[axis]).join(',')
+    const secondDirection = next.map((value, axis) => value - current[axis]).join(',')
+    if (firstDirection !== secondDirection) turns += 1
+  }
+  return turns
+}
+
+function findBoardRouteCandidates(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number, limit = 32) {
+  let attempts = 0
+  const candidates: string[][] = []
+
+  const walk = (current: string, route: string[], visited: Set<string>) => {
     attempts += 1
-    if (attempts > 40000) return null
-    if (route.length === length) return current === finish ? route : null
-    const remaining = length - route.length
+    if (attempts > 30000 || candidates.length >= limit) return
+    const remainingEdges = length - route.length
+    if (boardDistance(current, finish) > remainingEdges) return
+    if (route.length === length) {
+      if (current === finish) candidates.push(route)
+      return
+    }
     const options = getBoardNeighbors(current, boardSize)
       .filter((next) => !visited.has(next) && (!occupied.has(next) || next === finish))
-      .sort((a, b) => {
-        const [aRow, aColumn] = parseCellId(a)
-        const [bRow, bColumn] = parseCellId(b)
-        return Math.max(Math.abs(aRow - finishRow), Math.abs(aColumn - finishColumn)) - Math.max(Math.abs(bRow - finishRow), Math.abs(bColumn - finishColumn))
-      })
+      .sort((a, b) => boardDistance(a, finish) - boardDistance(b, finish))
 
     for (const next of options) {
-      if (next === finish && remaining !== 1) continue
+      if (next === finish && remainingEdges !== 1) continue
       const nextVisited = new Set(visited)
       nextVisited.add(next)
-      const result = walk(next, [...route, next], nextVisited)
-      if (result) return result
+      walk(next, [...route, next], nextVisited)
     }
-    return null
   }
 
-  return walk(cellId(startRow, startColumn), [start], new Set([start]))
+  walk(start, [start], new Set([start]))
+  return candidates.sort((a, b) => routeTurns(a) - routeTurns(b))
+}
+
+function findBoardRoute(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number) {
+  return findBoardRouteCandidates(start, finish, length, occupied, boardSize, 48)[0] ?? null
 }
 
 function App() {
@@ -216,8 +244,9 @@ function App() {
   const [searched, setSearched] = useState(false)
   const [mode, setMode] = useState<Mode>('quick')
   const [board, setBoard] = useState<Record<string, string>>({})
+  const [anchorCells, setAnchorCells] = useState<Set<string>>(new Set())
   const [selectedCells, setSelectedCells] = useState<string[]>([])
-  const [boardRoute, setBoardRoute] = useState<string[] | null>(null)
+  const [boardRoutes, setBoardRoutes] = useState<string[][]>([])
   const [boardMessage, setBoardMessage] = useState('Drag aspects onto the map, then select two of them.')
   const [obstacles, setObstacles] = useState<Set<string>>(new Set())
   const [editingObstacles, setEditingObstacles] = useState(false)
@@ -235,8 +264,9 @@ function App() {
     setResult(null)
     setSearched(false)
     setBoard({})
+    setAnchorCells(new Set())
     setSelectedCells([])
-    setBoardRoute(null)
+    setBoardRoutes([])
     setObstacles(new Set())
     setBoardMessage('Drag aspects onto the map, then select two of them.')
   }
@@ -267,8 +297,9 @@ function App() {
 
   const placeAspect = (target: string, aspect: string) => {
     setBoard((previous) => ({ ...previous, [target]: aspect }))
+    setAnchorCells((previous) => new Set(previous).add(target))
     setSelectedCells((previous) => previous.filter((id) => id !== target))
-    setBoardRoute(null)
+    setBoardRoutes([])
     setBoardMessage('Select the starting and ending aspects on the map.')
   }
 
@@ -280,14 +311,24 @@ function App() {
       else delete next[source]
       return next
     })
+    setAnchorCells((previous) => {
+      const next = new Set(previous)
+      const sourceIsAnchor = previous.has(source)
+      const targetIsAnchor = previous.has(target)
+      next.delete(source)
+      next.delete(target)
+      if (sourceIsAnchor) next.add(target)
+      if (targetIsAnchor) next.add(source)
+      return next
+    })
     setSelectedCells((previous) => previous.map((id) => id === source ? target : id === target ? source : id))
-    setBoardRoute(null)
+    setBoardRoutes([])
     setBoardMessage('Aspect moved. Select endpoints or continue editing.')
   }
 
   const selectBoardCell = (id: string) => {
     if (!board[id]) return
-    setBoardRoute(null)
+    setBoardRoutes([])
     setSelectedCells((previous) => previous.includes(id) ? previous.filter((item) => item !== id) : [...previous.slice(-1), id])
     setBoardMessage('Select the second aspect or build a chain.')
   }
@@ -320,19 +361,91 @@ function App() {
       route.forEach((id, index) => { next[id] = path[index] })
       return next
     })
-    setBoardRoute(route)
+    setBoardRoutes([route])
     setSelectedCells([])
     setBoardMessage(`Chain built with ${path.length - 2} intermediate aspects.`)
   }
 
+  const solveEntireMap = () => {
+    const anchors = [...anchorCells].filter((id) => board[id] && !obstacles.has(id))
+    if (anchors.length < 2) {
+      setBoardMessage('Place at least two source aspects on the map before using auto-connect.')
+      return
+    }
+
+    const workingBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<string, string>
+    const connected = new Set<string>([anchors[0]])
+    const remaining = new Set(anchors.slice(1))
+    const routes: string[][] = []
+
+    while (remaining.size) {
+      let best: { target: string; route: string[]; aspects: string[]; score: number } | null = null
+
+      for (const target of remaining) {
+        for (const source of connected) {
+          const occupied = new Set([...Object.keys(workingBoard).filter((id) => id !== source && id !== target), ...obstacles])
+          const shortestRoute = findShortestBoardRoute(source, target, occupied, boardSize)
+          if (!shortestRoute) continue
+
+          for (let extraSpaces = 0; extraSpaces <= 2; extraSpaces += 1) {
+            const aspectPath = findPath(workingBoard[source], workingBoard[target], Math.max(0, shortestRoute.length - 2 + extraSpaces), catalog.combinations, enabled)
+            if (!aspectPath) continue
+            const routeCandidates = findBoardRouteCandidates(source, target, aspectPath.length, occupied, boardSize, 12)
+
+            for (const route of routeCandidates) {
+              const futureNetwork = new Set([...connected, ...route])
+              const occupiedAfterRoute = new Set([...occupied, ...route.filter((id) => id !== target)])
+              let futurePenalty = 0
+
+              for (const futureTarget of remaining) {
+                if (futureTarget === target) continue
+                const distanceToNetwork = Math.min(...[...futureNetwork].map((id) => boardDistance(id, futureTarget)))
+                const hasExit = getBoardNeighbors(futureTarget, boardSize).some((id) => !occupiedAfterRoute.has(id) || futureNetwork.has(id))
+                futurePenalty += distanceToNetwork * 3 + (hasExit ? 0 : 100000)
+              }
+
+              const score = route.length * 1000 + routeTurns(route) * 12 + futurePenalty
+              if (!best || score < best.score) best = { target, route, aspects: aspectPath, score }
+            }
+          }
+        }
+      }
+
+      if (!best) {
+        setBoardMessage('The source aspects cannot all be connected. Remove some obstacles or move the isolated aspects.')
+        return
+      }
+
+      best.route.forEach((id, index) => {
+        workingBoard[id] = best.aspects[index]
+        connected.add(id)
+      })
+      remaining.delete(best.target)
+      routes.push(best.route)
+    }
+
+    setBoard(workingBoard)
+    setBoardRoutes(routes)
+    setSelectedCells([])
+    setBoardMessage(`Auto-connected ${anchors.length} source aspects with ${routes.length} optimal branches.`)
+  }
+
   const used = result ? result.slice(1, -1).reduce<Record<string, number>>((total, aspect) => ({ ...total, [aspect]: (total[aspect] ?? 0) + 1 }), {}) : {}
   const paletteAspects = catalog.aspects.filter((aspect) => enabled.has(aspect) && `${label(aspect)} ${aspect}`.toLocaleLowerCase().includes(paletteQuery.toLocaleLowerCase()))
+  const boardRouteOrder = useMemo(() => {
+    const order = new Map<string, number>()
+    boardRoutes.forEach((route) => route.forEach((id) => {
+      if (!order.has(id)) order.set(id, order.size + 1)
+    }))
+    return order
+  }, [boardRoutes])
   const changeBoardSize = (nextSize: number) => {
     setBoardSize(nextSize)
     setBoard({})
+    setAnchorCells(new Set())
     setObstacles(new Set())
     setSelectedCells([])
-    setBoardRoute(null)
+    setBoardRoutes([])
     setBoardMessage(`Map resized to a radius of ${Math.floor(nextSize / 2)} rings. Place the aspects again.`)
   }
 
@@ -374,13 +487,13 @@ function App() {
         </aside> : null}
       </section>
 
-      {mode === 'board' && <section className="panel research-board" aria-label="Research map"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Palette</p><h2>Aspects</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search aspects for the map" /><p className="palette-help">Drag an aspect onto a free cell.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Knowledge infusion</p><h2>Research map</h2></div></div><label className="board-size">Map radius: <strong>{Math.floor(boardSize / 2)} rings</strong><input type="range" min="2" max="7" value={Math.floor(boardSize / 2)} onChange={(event) => changeBoardSize(Number(event.target.value) * 2 + 1)} /></label><span>{editingObstacles ? 'Click empty cells to place obstacles' : 'Select two aspects, then build the chain'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth, height: (boardSize - 1) * hexRowStep + hexHeight + hexRowStep / 2 }}>{boardRoute && <svg className="board-route-lines" aria-hidden="true"><polyline points={boardRoute.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + hexWidth / 2},${row * hexRowStep + (column % 2) * hexRowStep / 2 + hexHeight / 2}` }).join(' ')} /></svg>}{getBoardCells(boardSize).map(({ row, column }) => {
+      {mode === 'board' && <section className="panel research-board" aria-label="Research map"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Palette</p><h2>Aspects</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search aspects for the map" /><p className="palette-help">Drag an aspect onto a free cell.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Knowledge infusion</p><h2>Research map</h2></div></div><label className="board-size">Map radius: <strong>{Math.floor(boardSize / 2)} rings</strong><input type="range" min="2" max="7" value={Math.floor(boardSize / 2)} onChange={(event) => changeBoardSize(Number(event.target.value) * 2 + 1)} /></label><span>{editingObstacles ? 'Click empty cells to place obstacles' : 'Place source aspects, then auto-connect the map'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth, height: (boardSize - 1) * hexRowStep + hexHeight + hexRowStep / 2 }}>{boardRoutes.length > 0 && <svg className="board-route-lines" aria-hidden="true">{boardRoutes.map((route, index) => <polyline key={index} points={route.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + hexWidth / 2},${row * hexRowStep + (column % 2) * hexRowStep / 2 + hexHeight / 2}` }).join(' ')} />)}</svg>}{getBoardCells(boardSize).map(({ row, column }) => {
         const id = cellId(row, column)
         const aspect = board[id]
-        const routeIndex = boardRoute?.indexOf(id) ?? -1
+        const routeNumber = boardRouteOrder.get(id)
         const blocked = obstacles.has(id)
-        return <div key={id} style={{ left: column * hexColumnStep, top: row * hexRowStep + (column % 2) * hexRowStep / 2 }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeIndex >= 0 ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoute(null) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeIndex >= 0 && <span className="cell-order">{routeIndex + 1}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoute(null) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
-      })}</div></div><div className="board-actions" aria-live="polite"><div className="selected-aspects">{selectedCells.length === 0 && <span>Select start and end aspects</span>}{selectedCells.map((id, index) => <div key={id}><b>{index === 0 ? 'From' : 'To'}</b><AspectIcon aspect={board[id]} /><span>{label(board[id])}</span></div>)}</div><p>{boardMessage}</p><button className="obstacle-button" type="button" onClick={() => setEditingObstacles((current) => !current)}>{editingObstacles ? 'Done editing obstacles' : 'Edit obstacles'}</button><button className="find-button" type="button" onClick={buildBoardPath}>Build chain <span>✦</span></button><button className="clear-map" type="button" onClick={() => { setBoard({}); setObstacles(new Set()); setSelectedCells([]); setBoardRoute(null); setBoardMessage('Map cleared. Drag new aspects onto it.') }}>Clear map</button></div></div></div></section>}
+        return <div key={id} style={{ left: column * hexColumnStep, top: row * hexRowStep + (column % 2) * hexRowStep / 2 }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${anchorCells.has(id) ? 'is-anchor' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeNumber !== undefined ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoutes([]) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeNumber !== undefined && <span className="cell-order">{routeNumber}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setAnchorCells((previous) => { const next = new Set(previous); next.delete(id); return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoutes([]) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
+      })}</div></div><div className="board-actions" aria-live="polite"><div className="selected-aspects">{selectedCells.length === 0 && <span>Select two aspects for a manual branch</span>}{selectedCells.map((id, index) => <div key={id}><b>{index === 0 ? 'From' : 'To'}</b><AspectIcon aspect={board[id]} /><span>{label(board[id])}</span></div>)}</div><p>{boardMessage}</p><button className="magic-button" type="button" onClick={solveEntireMap}>Auto-connect all <span>✦</span></button><button className="obstacle-button" type="button" onClick={() => setEditingObstacles((current) => !current)}>{editingObstacles ? 'Done editing obstacles' : 'Edit obstacles'}</button><button className="manual-chain-button" type="button" onClick={buildBoardPath}>Connect selected</button><button className="clear-map" type="button" onClick={() => { setBoard({}); setAnchorCells(new Set()); setObstacles(new Set()); setSelectedCells([]); setBoardRoutes([]); setBoardMessage('Map cleared. Drag new aspects onto it.') }}>Clear map</button></div></div></div></section>}
 
       <section className="panel inventory-panel">
         <div className="inventory-header"><div className="panel-heading"><span className="step-number">3</span><div><h2>Available aspects</h2><p>Click an aspect to exclude it from the search.</p></div></div><div className="inventory-actions"><button type="button" onClick={() => { setEnabled(new Set(catalog.aspects)); setActiveAddons(new Set(addonEntries.map(([id]) => id))) }}>Select all</button><button type="button" onClick={() => { setEnabled(new Set()); setActiveAddons(new Set()) }}>Deselect all</button></div></div>
