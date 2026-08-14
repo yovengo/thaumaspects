@@ -505,7 +505,7 @@ function App() {
         })}</div>
       </section>
 
-      <footer>Data and original logic: <a href="https://github.com/ythri/tcresearch/tree/gh-pages" target="_blank" rel="noreferrer">ythri/tcresearch</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</footer>
+      <footer>Data and original logic: <a href="https://github.com/ythri/tcresearch/tree/gh-pages" target="_blank" rel="noreferrer">ythri/tcresearch</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Source code: <a href="https://github.com/yovengo/thaumaspects" target="_blank" rel="noreferrer">GitHub</a>.</footer>
     </main>
   )
 }
