@@ -19,13 +19,20 @@ The helper finds aspect connections for Thaumcraft 4.x–5.x research. In additi
 
 ## Essentia data
 
-The planner ships with 14,338 item-aspect rows from the community [GTNH item aspect lookup](https://github.com/axcou/thaumcraft-gtnh-solver), itself generated from the [GTNH Aspects spreadsheet](https://docs.google.com/spreadsheets/d/1oaV9g5GoS_qkfZzKVrE85km2lsL8YieX_FZ9mA3bscg). Its practical-source preference comes from the [EasyPure Aspect Sources sheet](https://docs.google.com/spreadsheets/d/1Llvu91Vmn4RcCE__lKV8p_MIR9tiaV2URGbkombvlkE). The data is a scan database without a pinned GTNH release or item IDs. Some names occur with different aspect profiles; those rows are shown separately. The data does not prove that every listed item is accepted by an alchemical furnace, or that its values match a particular pack version. Check unfamiliar options in your installed pack's NEI.
+The planner contains **24,066 item profiles** from the `essentia_smelting` recipes in the [GTNH Planner 2.9.0-beta-2 Oracle dataset](https://github.com/Samiracle64/gtnh-factory-flow). Each row has the input registry ID and the exact aspect output declared by that furnace recipe. Names and item families are never used to invent aspects. An item that exists in the registry but has no smelting recipe in this dataset is not presented as an essentia source.
 
-The planner favors simple, familiar items by default and also shows sets using fewer items or less surplus essentia. The full 14,338-row catalog is searchable and filterable by the selected aspects; any item can be selected or added to a custom set. Results are recommendations based on the available item data, not a guaranteed global optimum. Recipe lookup is outside the current scope.
+The default plan searches combinations with a bounded beam search, so different requested aspects may come from different items. A generic acquisition score is calculated from the recipe graph for the selected machine tier; it considers ingredients, crafting depth and renewable crop harvests. The planner also accounts for aspect concentration, unwanted essentia and the number of item types, keeping low-yield everyday materials ahead of concentrated artifacts in the default plan. There are no per-item bonuses, exclusions, or hand-entered aspect profiles. Players can mark stockpiled items or exclude unavailable ones. Acquisition is an estimate: the dataset does not know world rarity, the player's inventory, or all progression gates, and the bounded search does not prove a global optimum.
 
-All 61 aspects have icons in the picker. Every item-aspect row also has an image: 10,914 rows match a unique item name in an icon source, 1,507 match names shared by multiple items, and 1,917 use a related or type-based game sprite. A `?` badge marks the latter two cases. Since the aspect source has names but no registry IDs, a matching name cannot guarantee the pictured variant is the exact item in every GTNH version.
+The catalog contains 69 aspects. Item pictures use the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4) when a name and mod have a unique match, otherwise the exact rendered icon from the 2.9 resource index. A small number of items have no icon in either source and show initials instead. The picker also shows initials when an aspect icon is unavailable. Minecraft and mod textures belong to their respective creators.
 
-The item images come from the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4), [GTNH NEI 2.8 atlas](https://github.com/Milky-way-Galaxy/gtnhnei), and [GTNH Planner 2.9 resource index](https://github.com/Samiracle64/gtnh-factory-flow). The compact 2.7.4 atlas and selected rendered PNGs are stored in `public/gt-icons/`. `scripts/build-item-icons.py` recreates the item-to-image mapping from those public data files; run `python3 scripts/build-item-icons.py --help` for its input arguments. The 13 common vanilla textures in `public/item-icons/` remain as a fallback. Minecraft and mod textures belong to their respective creators.
+To regenerate the catalog from the downloaded Oracle resource index and all recipe shards:
+
+```bash
+python3 scripts/build-oracle-catalog.py --data-274 /path/to/data.bin --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards --download
+python3 scripts/build-acquisition-scores.py --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards
+```
+
+The generator validates unique registry IDs and derives all aspect profiles from furnace outputs. The raw Oracle shards are build inputs and are not committed. The planned infusion-recipe picker is outside the current scope.
 
 ## Getting started
 

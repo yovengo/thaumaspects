@@ -1,29 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { buildPlans, itemSimplicity, planFromLines, prepareItems } from '../lib/essentiaPlanner'
+import { buildPlans, itemSimplicity, key as itemKey, planFromLines, prepareItems } from '../lib/essentiaPlanner'
 import type { ItemAspect, PlanLine, Requirement } from '../lib/essentiaPlanner'
 
-type Catalog = { aspects: string[]; items: ItemAspect[]; iconSource?: { counts: Record<string, number> } }
+type Catalog = { aspects: string[]; items: ItemAspect[]; aspectSource?: { version: string; count: number }; iconSource?: { counts: Record<string, number> }; acquisitionSource?: { version: string; recipeCount: number } }
 type Row = { id: number; aspect: string; amount: number }
 type CatalogFilter = 'allSelected' | 'anySelected' | 'allItems'
 type CatalogSort = 'practical' | 'quantity' | 'name'
+type Availability = { preferred: string[]; excluded: string[]; stage: string }
+const availabilityStorageKey = 'thaumaspects:availability:v2'
+const stages = [
+  ['NONE', 'Без машин'], ['LV', 'LV'], ['MV', 'MV'], ['HV', 'HV'],
+  ['IV', 'IV'], ['UV', 'UV'], ['MAX', 'Все уровни'],
+]
 
-const textures: Record<string, string> = {
-  Coal: 'coal', Charcoal: 'charcoal', 'Block of Coal': 'coal_block', Bone: 'bone', Book: 'book_normal',
-  Flint: 'flint', 'Glowstone Dust': 'glowstone_dust', Gunpowder: 'gunpowder', Paper: 'paper',
-  Redstone: 'redstone_dust', 'Rotten Flesh': 'rotten_flesh', Stick: 'stick', Sugar: 'sugar',
+function readAvailability(): Availability {
+  try {
+    const stored = JSON.parse(localStorage.getItem(availabilityStorageKey) ?? '{}') as Partial<Availability>
+    return {
+      preferred: Array.isArray(stored.preferred) ? stored.preferred.filter((value): value is string => typeof value === 'string') : [],
+      excluded: Array.isArray(stored.excluded) ? stored.excluded.filter((value): value is string => typeof value === 'string') : [],
+      stage: stages.some(([value]) => value === stored.stage) ? stored.stage! : 'NONE',
+    }
+  } catch {
+    return { preferred: [], excluded: [], stage: 'NONE' }
+  }
 }
-const aliases: Record<string, string> = {
-  coal: 'уголь', charcoal: 'древесный уголь', 'coal coke': 'кокс', redstone: 'редстоун красная пыль',
-  bone: 'кость', paper: 'бумага', book: 'книга', sugar: 'сахар', flint: 'кремень',
-}
+
 const displayItemName = (name: string) => name.replace(/§[0-9a-fk-or]/gi, '')
 const aspectWord = (count: number) => count % 10 === 1 && count % 100 !== 11 ? 'аспект' : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'аспекта' : 'аспектов'
 const aspectLabel = (aspect: string) => aspect.replace(/^./, (letter) => letter.toUpperCase())
-const itemKey = (item: ItemAspect) => `${item.name}|${Object.entries(item.aspects).sort(([a], [b]) => a.localeCompare(b)).map(([a, n]) => `${a}:${n}`).join(',')}`
 
 function AspectIcon({ name }: { name: string }) {
-  return <img className="ess-aspect-icon" src={`/aspects/color/${name === 'strontio' ? 'stronito' : name}.png`} alt="" />
+  const [missing, setMissing] = useState(false)
+  return missing ? <span className="ess-aspect-icon ess-aspect-fallback" aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>
+    : <img className="ess-aspect-icon" src={`/aspects/color/${name === 'strontio' ? 'stronito' : name}.png`} onError={() => setMissing(true)} alt="" />
 }
 
 function AspectTag({ name, amount }: { name: string; amount?: number }) {
@@ -32,16 +43,15 @@ function AspectTag({ name, amount }: { name: string; amount?: number }) {
 
 function ItemIcon({ item, large = false }: { item: ItemAspect; large?: boolean }) {
   const { name, icon } = item
-  const texture = textures[name]
   const cleanName = displayItemName(name)
   const title = icon?.quality === 'ambiguous' ? 'В справочнике несколько предметов с этим названием: показана одна из игровых иконок'
     : icon?.quality === 'related' ? 'Показана иконка близкого предмета'
       : icon?.quality === 'generic' ? 'Точная иконка не найдена: показан игровой значок этого типа предметов'
         : undefined
-  return <span className={`ess-item-icon ${large ? 'is-large' : ''} ${icon || texture ? 'has-texture' : ''} ${icon && icon.quality !== 'exact' ? 'is-approximate' : ''}`} title={title} aria-hidden="true">
+  return <span className={`ess-item-icon ${large ? 'is-large' : ''} ${icon ? 'has-texture' : ''} ${icon && icon.quality !== 'exact' ? 'is-approximate' : ''}`} title={title} aria-hidden="true">
     {icon?.kind === 'atlas' ? <span className="ess-atlas-sprite" style={{ backgroundPosition: `${-(icon.id % 256) * 32}px ${-Math.floor(icon.id / 256) * 32}px` }} />
       : icon?.kind === 'rendered' ? <img src={`/gt-icons/rendered/${icon.file}`} alt="" />
-        : texture ? <img src={`/item-icons/${texture}.png`} alt="" /> : <span>{cleanName.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()}</span>}
+        : <span>{cleanName.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()}</span>}
   </span>
 }
 
@@ -78,8 +88,8 @@ function AspectPicker({ value, aspects, excluded, onChange }: { value: string; a
 }
 
 function countForItem(item: ItemAspect, required: Requirement) {
-  const aspects = Object.keys(required)
-  if (aspects.length === 0 || aspects.some((aspect) => !(item.aspects[aspect] > 0))) return null
+  const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0 && (item.aspects[aspect] ?? 0) > 0)
+  if (aspects.length === 0) return null
   return Math.max(...aspects.map((aspect) => Math.ceil(required[aspect] / item.aspects[aspect])))
 }
 
@@ -90,18 +100,23 @@ export default function EssentiaPlanner() {
   const [nextId, setNextId] = useState(3)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [customLines, setCustomLines] = useState<PlanLine[]>([])
-  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('allSelected')
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('anySelected')
   const [catalogSort, setCatalogSort] = useState<CatalogSort>('practical')
   const [query, setQuery] = useState('')
   const [visibleCount, setVisibleCount] = useState(30)
   const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set())
+  const [availability, setAvailability] = useState<Availability>(readAvailability)
   const resultRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try { localStorage.setItem(availabilityStorageKey, JSON.stringify(availability)) } catch { /* Private mode can block storage. */ }
+  }, [availability])
 
   useEffect(() => {
     const controller = new AbortController()
     fetch('/item-aspects-gtnh.json', { signal: controller.signal })
       .then((response) => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json() as Promise<Catalog> })
-      .then((data) => setCatalog({ aspects: data.aspects, items: prepareItems(data.items), iconSource: data.iconSource }))
+      .then((data) => setCatalog({ aspects: data.aspects, items: prepareItems(data.items), aspectSource: data.aspectSource, iconSource: data.iconSource, acquisitionSource: data.acquisitionSource }))
       .catch((error: unknown) => { if (error instanceof Error && error.name !== 'AbortError') setLoadError(true) })
     return () => controller.abort()
   }, [])
@@ -111,7 +126,9 @@ export default function EssentiaPlanner() {
     return result
   }, {}), [rows])
   const requestedAspects = Object.keys(required)
-  const plans = useMemo(() => catalog ? buildPlans(catalog.items, required) : [], [catalog, required])
+  const preferences = useMemo(() => ({ preferred: new Set(availability.preferred), excluded: new Set(availability.excluded), stage: availability.stage }), [availability])
+  const availabilityItems = useMemo(() => new Map(catalog?.items.map((item) => [itemKey(item), item]) ?? []), [catalog])
+  const plans = useMemo(() => catalog ? buildPlans(catalog.items, required, preferences) : [], [catalog, required, preferences])
   const customPlan = useMemo(() => planFromLines(customLines, required), [customLines, required])
   const selected = selectedId === 'custom' && customLines.length ? customPlan : plans.find((plan) => plan.id === selectedId) ?? plans[0]
   const shortage = selected ? Object.entries(selected.remaining).filter(([, amount]) => amount > 0) : []
@@ -138,19 +155,47 @@ export default function EssentiaPlanner() {
     const requestedAspects = Object.keys(required)
     const normalized = query.trim().toLocaleLowerCase()
     return catalog.items.filter((item) => {
-      if (normalized && !`${displayItemName(item.name)} ${aliases[displayItemName(item.name).toLocaleLowerCase()] ?? ''}`.toLocaleLowerCase().includes(normalized)) return false
+      if (normalized && !`${displayItemName(item.name)} ${item.registryId ?? ''}`.toLocaleLowerCase().includes(normalized)) return false
       if (catalogFilter === 'allItems' || requestedAspects.length === 0) return true
       return catalogFilter === 'allSelected'
         ? requestedAspects.every((aspect) => (item.aspects[aspect] ?? 0) > 0)
         : requestedAspects.some((aspect) => (item.aspects[aspect] ?? 0) > 0)
     }).sort((a, b) => {
+      const preferredOrder = Number(preferences.preferred.has(itemKey(b))) - Number(preferences.preferred.has(itemKey(a)))
+      if (preferredOrder) return preferredOrder
+      const excludedOrder = Number(preferences.excluded.has(itemKey(a))) - Number(preferences.excluded.has(itemKey(b)))
+      if (excludedOrder) return excludedOrder
       if (catalogSort === 'name') return displayItemName(a.name).localeCompare(displayItemName(b.name))
-      const aCount = countForItem(a, required) ?? Infinity
-      const bCount = countForItem(b, required) ?? Infinity
-      if (catalogSort === 'quantity') return aCount - bCount || itemSimplicity(a) - itemSimplicity(b) || a.name.localeCompare(b.name)
-      return itemSimplicity(a) - itemSimplicity(b) || aCount - bCount || a.name.localeCompare(b.name)
+      const aCount = requestedAspects.every((aspect) => (a.aspects[aspect] ?? 0) > 0) ? countForItem(a, required) ?? Infinity : Infinity
+      const bCount = requestedAspects.every((aspect) => (b.aspects[aspect] ?? 0) > 0) ? countForItem(b, required) ?? Infinity : Infinity
+      if (catalogSort === 'quantity') return aCount - bCount || itemSimplicity(a, preferences) - itemSimplicity(b, preferences) || a.name.localeCompare(b.name)
+      const aCoverage = requestedAspects.filter((aspect) => (a.aspects[aspect] ?? 0) > 0).length
+      const bCoverage = requestedAspects.filter((aspect) => (b.aspects[aspect] ?? 0) > 0).length
+      return itemSimplicity(a, preferences) / Math.max(1, aCoverage) - itemSimplicity(b, preferences) / Math.max(1, bCoverage)
+        || bCoverage - aCoverage || aCount - bCount || a.name.localeCompare(b.name)
     })
-  }, [catalog, query, catalogFilter, catalogSort, required])
+  }, [catalog, query, catalogFilter, catalogSort, required, preferences])
+
+  const preferItem = (item: ItemAspect) => {
+    const id = itemKey(item)
+    setAvailability((previous) => ({
+      stage: previous.stage,
+      preferred: previous.preferred.includes(id) ? previous.preferred.filter((value) => value !== id) : [...previous.preferred, id],
+      excluded: previous.excluded.filter((value) => value !== id),
+    }))
+  }
+  const excludeItem = (item: ItemAspect) => {
+    const id = itemKey(item)
+    setAvailability((previous) => ({
+      stage: previous.stage,
+      preferred: previous.preferred.filter((value) => value !== id),
+      excluded: previous.excluded.includes(id) ? previous.excluded : [...previous.excluded, id],
+    }))
+  }
+  const restoreItem = (item: ItemAspect) => {
+    const id = itemKey(item)
+    setAvailability((previous) => ({ ...previous, excluded: previous.excluded.filter((value) => value !== id) }))
+  }
 
   const updateRow = (id: number, change: Partial<Row>) => setRows((previous) => previous.map((row) => row.id === id ? { ...row, ...change } : row))
   const addRow = () => {
@@ -160,15 +205,20 @@ export default function EssentiaPlanner() {
     setNextId((value) => value + 1)
   }
   const chooseItem = (item: ItemAspect) => {
-    const count = countForItem(item, required)
-    setCustomLines((previous) => {
-      if (count !== null) return [{ item, count }]
-      const current = selectedId === 'custom' ? previous : []
-      const found = current.find((line) => itemKey(line.item) === itemKey(item))
-      return found ? current.map((line) => line === found ? { ...line, count: line.count + 1 } : line) : [...current, { item, count: 1 }]
-    })
+    const coversAll = requestedAspects.every((aspect) => (item.aspects[aspect] ?? 0) > 0)
+    const current = selectedId === 'custom' ? customLines : []
+    const needed = coversAll ? required : planFromLines(current, required).remaining
+    const count = countForItem(item, needed)
+    if (count === null) return
+    const found = current.find((line) => itemKey(line.item) === itemKey(item))
+    const next = coversAll ? [{ item, count }]
+      : found ? current.map((line) => line === found ? { ...line, count: line.count + count } : line)
+        : [...current, { item, count }]
+    setCustomLines(next)
     setSelectedId('custom')
-    requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    if (Object.values(planFromLines(next, required).remaining).every((amount) => amount === 0)) {
+      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
   }
   const updateCustomCount = (item: ItemAspect, count: number) => {
     if (count <= 0 && customLines.length === 1) setSelectedId(null)
@@ -185,14 +235,16 @@ export default function EssentiaPlanner() {
     return next
   })
   const matchesShown = filteredItems.slice(0, visibleCount)
+  const catalogNeeded = selectedId === 'custom' && customLines.length > 0 ? customPlan.remaining : required
 
   return <div className="ess-page">
-    <div className="ess-intro"><div><p className="eyebrow">Алхимическая печь · GTNH</p><h2>Планировщик эссенции</h2><p>Задайте нужные аспекты. Сначала покажем простой набор, затем вы сможете выбрать другой предмет или собрать свой.</p></div><span className="ess-dataset-count">{catalog ? catalog.items.length.toLocaleString('ru-RU') : '—'}<small>предметов с иконками</small></span></div>
+    <div className="ess-intro"><div><p className="eyebrow">Алхимическая печь · GTNH</p><h2>Планировщик эссенции</h2><p>Задайте нужные аспекты и этап сборки. Подбор сравнит способы получения предметов по рецептам и покажет альтернативы.</p></div><span className="ess-dataset-count">{catalog ? catalog.items.length.toLocaleString('ru-RU') : '—'}<small>профилей предметов</small></span></div>
 
     <section className="ess-main" aria-label="Расчёт эссенции">
       <div className="panel ess-requirements"><div className="ess-section-head"><span className="step-number">1</span><div><h3>Сколько нужно?</h3><p>Добавьте все аспекты из рецепта инфузии.</p></div></div>
         <div className="ess-rows">{rows.map((row) => <div className="ess-row" key={row.id}><AspectPicker value={row.aspect} aspects={availableAspects} excluded={usedAspects} onChange={(aspect) => updateRow(row.id, { aspect })} /><label className="ess-amount"><span>Количество</span><input type="number" min="0" max="1000" step="1" value={row.amount} onChange={(event) => updateRow(row.id, { amount: Math.min(1000, Math.max(0, Math.floor(Number(event.target.value) || 0))) })} /></label><button className="ess-remove" type="button" disabled={rows.length === 1} aria-label={`Убрать ${aspectLabel(row.aspect)}`} onClick={() => setRows((previous) => previous.filter((entry) => entry.id !== row.id))}>×</button></div>)}</div>
         <button className="ess-add" type="button" disabled={rows.length >= availableAspects.length} onClick={addRow}>＋ Добавить аспект</button>
+        <label className="ess-stage-control"><span>Доступный этап</span><select value={availability.stage} onChange={(event) => setAvailability((previous) => ({ ...previous, stage: event.target.value }))}>{stages.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Рецепты машин выше этого уровня не учитываются.</small></label>
         <div className="ess-request-summary"><strong>Нужно</strong><div>{requestedAspects.map((aspect) => <AspectTag key={aspect} name={aspect} amount={required[aspect]} />)}</div></div>
       </div>
 
@@ -202,7 +254,7 @@ export default function EssentiaPlanner() {
         {catalog && requestedAspects.length === 0 && <div className="ess-state">Укажите количество хотя бы одного аспекта.</div>}
         {catalog && requestedAspects.length > 0 && !selected && <div className="ess-state">Подходящий набор не найден. Попробуйте другие аспекты.</div>}
         {selected && <><div className="ess-picked-head"><span className="ess-pick-label">{selectedId === 'custom' ? 'Ваш выбор' : selected.title}</span><strong>{selected.itemCount.toLocaleString('ru-RU')} <small>шт.</small></strong></div>
-          <div className="ess-picked-items">{selected.lines.map(({ item, count }) => <div className="ess-picked-item" key={itemKey(item)}><ItemIcon item={item} large /><div><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong><span>{Object.entries(item.aspects).map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')} за 1 шт.</span></div>{selectedId === 'custom' ? <div className="ess-count-stepper"><button type="button" aria-label={`Уменьшить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count - 1)}>−</button><b>{count}</b><button type="button" aria-label={`Увеличить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count + 1)}>+</button></div> : <b className="ess-item-count">× {count}</b>}</div>)}</div>
+          <div className="ess-picked-items">{selected.lines.map(({ item, count }) => <div className="ess-picked-item" key={itemKey(item)}><ItemIcon item={item} large /><div><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong><span>{Object.entries(item.aspects).map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')} за 1 шт.</span></div>{selectedId === 'custom' ? <div className="ess-count-stepper"><button type="button" aria-label={`Уменьшить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count - 1)}>−</button><b>{count}</b><button type="button" aria-label={`Увеличить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count + 1)}>+</button></div> : <div className="ess-item-tools"><b className="ess-item-count">× {count}</b><button type="button" onClick={() => excludeItem(item)}>Нет под рукой</button></div>}</div>)}</div>
           <div className="ess-progress-list">{requestedAspects.map((aspect) => { const amount = selected.produced[aspect] ?? 0; const target = required[aspect]; return <div className="ess-progress" key={aspect}><AspectIcon name={aspect} /><span>{aspectLabel(aspect)}</span><b className={amount < target ? 'is-short' : ''}>{amount} / {target}</b><div className="ess-progress-track"><span style={{ width: `${Math.min(100, amount / target * 100)}%` }} /></div></div> })}</div>
           {shortage.length > 0 && <div className="ess-shortage"><strong>Эссенции пока не хватает</strong><span>{shortage.map(([aspect, amount]) => `${aspectLabel(aspect)}: ещё ${amount}`).join(' · ')}</span><small>Добавьте предметы из каталога или увеличьте их количество.</small></div>}
           <div className="ess-result-meta"><span>{selected.extra === 0 ? 'Без лишней эссенции' : `Лишняя эссенция: ${selected.extra}`}</span><span>{selected.lines.length} {selected.lines.length === 1 ? 'вид предмета' : 'вида предметов'}</span></div>
@@ -211,16 +263,38 @@ export default function EssentiaPlanner() {
       </div>
     </section>
 
-    {plans.length > 1 && <section className="panel ess-alternatives" aria-label="Альтернативные наборы"><div className="ess-section-head"><span className="step-number">3</span><div><h3>Выберите другой вариант</h3><p>Каждая карточка заменяет весь текущий набор. Нажмите, чтобы увидеть подробный расчёт выше.</p></div></div><div className="ess-alternative-grid">{plans.map((plan) => <button type="button" className={`ess-alternative ${selected?.id === plan.id ? 'is-active' : ''}`} key={plan.id} onClick={() => selectPlan(plan.id)}><ItemIcon item={plan.lines[0].item} /><span><strong>{plan.lines.length === 1 ? displayItemName(plan.lines[0].item.name) : plan.title}</strong><small>{plan.lines.length === 1 ? `${plan.lines[0].count} шт. для всего запроса` : `${plan.itemCount} шт. · ${plan.lines.length} вида`}</small></span><em>{plan.extra === 0 ? 'без избытка' : `+${plan.extra} избытка`}</em></button>)}</div></section>}
+    {plans.length > 1 && <section className="panel ess-alternatives" aria-label="Альтернативные наборы"><div className="ess-section-head"><span className="step-number">3</span><div><h3>Выберите другой вариант</h3><p>Каждая карточка заменяет весь текущий набор. Нажмите, чтобы увидеть подробный расчёт выше.</p></div></div><div className="ess-alternative-grid">{plans.map((plan) => <button type="button" className={`ess-alternative ${selected?.id === plan.id ? 'is-active' : ''}`} key={plan.id} onClick={() => selectPlan(plan.id)}><span className="ess-alternative-icons">{plan.lines.slice(0, 2).map(({ item }) => <ItemIcon key={itemKey(item)} item={item} />)}</span><span className="ess-alternative-copy"><strong>{plan.title}</strong><small>{plan.lines.map(({ item, count }) => `${count}× ${displayItemName(item.name)}`).join(' + ')}</small></span><em>{plan.extra === 0 ? 'без избытка' : `+${plan.extra} избытка`}</em></button>)}</div></section>}
 
-    <section className="panel ess-catalog" aria-label="Полный каталог предметов"><div className="ess-catalog-header"><div className="ess-section-head"><span className="step-number">4</span><div><h3>Весь датасет предметов</h3><p>Поиск по полному справочнику аспектов. Выберите предмет или добавьте частичный источник в свой набор.</p></div></div><span className="ess-catalog-total">{catalog?.items.length.toLocaleString('ru-RU') ?? '—'} записей</span></div>
-      <div className="ess-catalog-toolbar"><label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Поиск предмета: Coal, уголь, Redstone…" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(30) }} aria-label="Поиск по предметам" />{query && <button type="button" aria-label="Очистить поиск" onClick={() => { setQuery(''); setVisibleCount(30) }}>×</button>}</label><label className="ess-sort"><span>Сортировка</span><select value={catalogSort} onChange={(event) => { setCatalogSort(event.target.value as CatalogSort); setVisibleCount(30) }}><option value="practical">Простые сначала</option><option value="quantity">Меньше предметов</option><option value="name">По названию</option></select></label></div>
+    <section className="panel ess-catalog" aria-label="Полный каталог предметов"><div className="ess-catalog-header"><div className="ess-section-head"><span className="step-number">4</span><div><h3>Весь датасет предметов</h3><p>Найдите предмет и отметьте ☆, если он у вас в избытке. Подбор запомнит ваш выбор. Предмет из результата можно исключить кнопкой «Нет под рукой».</p></div></div><span className="ess-catalog-total">{catalog?.items.length.toLocaleString('ru-RU') ?? '—'} записей</span></div>
+      {(availability.preferred.length > 0 || availability.excluded.length > 0) && <div className="ess-availability-panel"><strong>Мои источники</strong><div>{availability.preferred.map((id) => { const item = availabilityItems.get(id); return item && <button type="button" key={id} onClick={() => preferItem(item)} aria-label={`Убрать приоритет ${displayItemName(item.name)}`}>★ {displayItemName(item.name)} <span>×</span></button> })}{availability.excluded.map((id) => { const item = availabilityItems.get(id); return item && <button type="button" className="is-excluded" key={id} onClick={() => restoreItem(item)} aria-label={`Вернуть ${displayItemName(item.name)} в подбор`}>↶ {displayItemName(item.name)} <span>вернуть</span></button> })}</div></div>}
+      <div className="ess-catalog-toolbar"><label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Поиск предмета или ID: Coal, minecraft:coal…" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(30) }} aria-label="Поиск по предметам" />{query && <button type="button" aria-label="Очистить поиск" onClick={() => { setQuery(''); setVisibleCount(30) }}>×</button>}</label><label className="ess-sort"><span>Сортировка</span><select value={catalogSort} onChange={(event) => { setCatalogSort(event.target.value as CatalogSort); setVisibleCount(30) }}><option value="practical">Проще получить</option><option value="quantity">Меньше предметов</option><option value="name">По названию</option></select></label></div>
       <div className="ess-filter-tabs" role="group" aria-label="Фильтр предметов"><button type="button" className={catalogFilter === 'allSelected' ? 'is-active' : ''} onClick={() => { setCatalogFilter('allSelected'); setVisibleCount(30) }}>Все нужные аспекты</button><button type="button" className={catalogFilter === 'anySelected' ? 'is-active' : ''} onClick={() => { setCatalogFilter('anySelected'); setVisibleCount(30) }}>Хотя бы один</button><button type="button" className={catalogFilter === 'allItems' ? 'is-active' : ''} onClick={() => { setCatalogFilter('allItems'); setVisibleCount(30) }}>Весь каталог</button></div>
       <div className="ess-catalog-summary"><strong>{filteredItems.length.toLocaleString('ru-RU')} записей</strong><span>{catalogFilter === 'allSelected' ? 'содержат каждый выбранный аспект' : catalogFilter === 'anySelected' ? 'содержат один или несколько выбранных аспектов' : 'во всём датасете'}</span></div>
-      {catalog && <div className="ess-icon-legend"><span className="ess-icon-legend-mark">?</span><span>Значок с вопросом: несколько предметов с таким названием или показана похожая иконка. Без вопроса — название совпало с источником.</span></div>}
-      <div className="ess-catalog-list">{matchesShown.map((item) => { const count = countForItem(item, required); const overlap = requestedAspects.some((aspect) => (item.aspects[aspect] ?? 0) > 0); const aspectEntries = Object.entries(item.aspects).sort(([a], [b]) => Number(Boolean(required[b])) - Number(Boolean(required[a])) || a.localeCompare(b)); const key = itemKey(item); const expanded = expandedItems.has(key); return <div className="ess-catalog-item" key={key}><ItemIcon item={item} /><div className="ess-catalog-item-body"><div className="ess-catalog-name"><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>{variantLabels.has(key) && <small>{variantLabels.get(key)}</small>}</div><div className="ess-catalog-aspects">{(expanded ? aspectEntries : aspectEntries.slice(0, 6)).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}{aspectEntries.length > 6 && <button className="ess-more-aspects" type="button" aria-expanded={expanded} onClick={() => toggleExpanded(key)}>{expanded ? 'Свернуть' : `+${aspectEntries.length - 6} ${aspectWord(aspectEntries.length - 6)}`}</button>}</div></div><div className="ess-catalog-action"><span>{!overlap ? 'Нет нужных аспектов' : count === null ? 'Частичный источник' : `${count} шт. для цели`}</span><button type="button" disabled={!overlap} onClick={() => chooseItem(item)}>{!overlap ? 'Не подходит' : count === null ? 'Добавить +1' : 'Выбрать'}</button></div></div> })}{catalog && filteredItems.length === 0 && <p className="ess-no-results">Ничего не найдено. Попробуйте другое название или фильтр «Весь каталог».</p>}</div>
+      {catalog && <div className="ess-icon-legend"><span className="ess-icon-legend-mark">Aa</span><span>Для {catalog.iconSource?.counts.missing ?? 0} предметов источник не содержит иконку: вместо неё показаны инициалы. Остальные изображения взяты из игровых данных.</span></div>}
+      <div className="ess-catalog-list">{matchesShown.map((item) => {
+        const overlap = requestedAspects.some((aspect) => (item.aspects[aspect] ?? 0) > 0)
+        const coversAll = requestedAspects.every((aspect) => (item.aspects[aspect] ?? 0) > 0)
+        const count = countForItem(item, coversAll ? required : catalogNeeded)
+        const coveredAspects = requestedAspects.filter((aspect) => (item.aspects[aspect] ?? 0) > 0 && (coversAll || (catalogNeeded[aspect] ?? 0) > 0))
+        const aspectEntries = Object.entries(item.aspects).sort(([a], [b]) => Number(Boolean(required[b])) - Number(Boolean(required[a])) || a.localeCompare(b))
+        const key = itemKey(item)
+        const expanded = expandedItems.has(key)
+        const isPreferred = preferences.preferred.has(key)
+        const isExcluded = preferences.excluded.has(key)
+        return <div className={`ess-catalog-item ${isExcluded ? 'is-excluded' : ''}`} key={key}>
+          <ItemIcon item={item} />
+          <div className="ess-catalog-item-body">
+            <div className="ess-catalog-name"><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>{variantLabels.has(key) && <small>{variantLabels.get(key)}</small>}{item.registryId && <small title={item.registryId}>{item.registryId.split(':')[0]}</small>}<button className={`ess-availability-button ${isPreferred ? 'is-preferred' : ''}`} type="button" aria-label={isExcluded ? `Вернуть ${displayItemName(item.name)} в подбор` : isPreferred ? `Убрать приоритет ${displayItemName(item.name)}` : `Предпочитать ${displayItemName(item.name)}`} aria-pressed={isPreferred} title={isExcluded ? 'Вернуть в подбор' : isPreferred ? 'Убрать отметку «Есть много»' : 'Есть много — предпочитать в расчёте'} onClick={() => isExcluded ? restoreItem(item) : preferItem(item)}>{isExcluded ? '↶' : isPreferred ? '★' : '☆'}</button></div>
+            <div className="ess-catalog-aspects">{(expanded ? aspectEntries : aspectEntries.slice(0, 6)).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}{aspectEntries.length > 6 && <button className="ess-more-aspects" type="button" aria-expanded={expanded} onClick={() => toggleExpanded(key)}>{expanded ? 'Свернуть' : `+${aspectEntries.length - 6} ${aspectWord(aspectEntries.length - 6)}`}</button>}</div>
+          </div>
+          <div className="ess-catalog-action">
+            <span>{!overlap ? 'Нет нужных аспектов' : count === null ? 'Уже покрыто' : `${count} шт. для ${coveredAspects.length === 1 ? aspectLabel(coveredAspects[0]) : `${coveredAspects.length} аспектов`}`}</span>
+            <button type="button" disabled={!overlap || count === null || isExcluded} onClick={() => chooseItem(item)}>{isExcluded ? 'Исключён' : !overlap ? 'Не подходит' : count === null ? 'Готово' : coversAll ? 'Выбрать набор' : `Добавить ${count} шт.`}</button>
+          </div>
+        </div>
+      })}{catalog && filteredItems.length === 0 && <p className="ess-no-results">Ничего не найдено. Попробуйте другое название или фильтр «Весь каталог».</p>}</div>
       {visibleCount < filteredItems.length && <button className="ess-show-more" type="button" onClick={() => setVisibleCount((count) => count + 30)}>Показать ещё 30 <span>↓</span></button>}
-      <div className="ess-data-note"><strong>О данных и иконках</strong><p>Аспекты взяты из <a href="https://github.com/axcou/thaumcraft-gtnh-solver" target="_blank" rel="noreferrer">публичного справочника GTNH</a>. Иконки найдены в атласах <a href="https://github.com/ShadowTheAge/gtnh-2.7.4" target="_blank" rel="noreferrer">GTNH 2.7.4</a> и <a href="https://github.com/Milky-way-Galaxy/gtnhnei" target="_blank" rel="noreferrer">GTNH 2.8</a>, а также в <a href="https://github.com/Samiracle64/gtnh-factory-flow" target="_blank" rel="noreferrer">каталоге GTNH 2.9</a>. {catalog?.iconSource && <>{(catalog.iconSource.counts.exact ?? 0).toLocaleString('ru-RU')} записей совпали с уникальным названием, {(catalog.iconSource.counts.ambiguous ?? 0).toLocaleString('ru-RU')} — с неоднозначным, для {((catalog.iconSource.counts.related ?? 0) + (catalog.iconSource.counts.generic ?? 0)).toLocaleString('ru-RU')} показан похожий игровой значок. </>}В справочнике аспектов нет ID предметов и номера сборки; не все совпадения можно проверить однозначно. Сверяйте незнакомые предметы в NEI вашей сборки.</p></div>
+      <div className="ess-data-note"><strong>О данных и иконках</strong><p>Каталог построен из {catalog?.aspectSource?.count.toLocaleString('ru-RU') ?? '—'} зарегистрированных рецептов плавки в эссенцию GTNH {catalog?.aspectSource?.version ?? ''}. У каждого предмета указан ID; аспекты и их количество взяты из выхода рецепта. Наличие предмета в NEI само по себе не означает, что он плавится в печи. Трудоёмкость оценивается по {catalog?.acquisitionSource?.recipeCount.toLocaleString('ru-RU') ?? '—'} рецептам этой же версии и остаётся приблизительной. Иконки взяты из <a href="https://github.com/ShadowTheAge/gtnh-2.7.4" target="_blank" rel="noreferrer">атласа GTNH</a> и <a href="https://github.com/Samiracle64/gtnh-factory-flow" target="_blank" rel="noreferrer">индекса ресурсов GTNH 2.9</a>.</p></div>
     </section>
   </div>
 }
