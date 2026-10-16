@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react'
 import { addonDictionary } from './data/addons.js'
 import { translate } from './data/aspects.js'
 import { versionDictionary } from './data/versions.js'
+import EssentiaPlanner from './components/EssentiaPlanner'
 import './App.css'
 
 type Combinations = Record<string, [string, string]>
 type VersionDefinition = { base_aspects: string[]; combinations: Combinations }
 type AddonDefinition = { name: string; aspects: string[]; combinations: Combinations }
-type Mode = 'quick' | 'board'
+type Mode = 'quick' | 'board' | 'essentia'
 
 const aspectNames = translate as Record<string, string>
 const versionMap = versionDictionary as unknown as Record<string, VersionDefinition>
@@ -453,17 +454,18 @@ function App() {
     <main className="app-shell">
       <header className="hero-panel">
         <div>
-          <p className="eyebrow">Thaumcraft 4 · 5</p>
-          <h1>Research Helper</h1>
-          <p className="intro">Build an aspect chain for your research note and exclude aspects you have not unlocked yet.</p>
+          <p className="eyebrow">Thaumcraft · GT New Horizons</p>
+          <h1>{mode === 'essentia' ? 'Thaumaspects' : 'Research Helper'}</h1>
+          <p className="intro">{mode === 'essentia' ? 'Введите аспекты для инфузии и получите список предметов для алхимической печи.' : 'Build an aspect chain for your research note and exclude aspects you have not unlocked yet.'}</p>
         </div>
         <div className="hero-rune" aria-hidden="true">✦</div>
       </header>
 
-      <section className={`workspace ${mode === 'board' ? 'board-mode' : ''}`} aria-label="Aspect connection search">
+      <nav className="main-mode-switch" aria-label="Режим работы"><button type="button" className={mode === 'quick' ? 'is-active' : ''} onClick={() => setMode('quick')}>Quick search</button><button type="button" className={mode === 'board' ? 'is-active' : ''} onClick={() => setMode('board')}>Research map</button><button type="button" className={mode === 'essentia' ? 'is-active' : ''} onClick={() => setMode('essentia')}>Эссенция</button></nav>
+
+      {mode !== 'essentia' && <section className={`workspace ${mode === 'board' ? 'board-mode' : ''}`} aria-label="Aspect connection search">
         <div className="panel search-panel">
           <div className="panel-heading"><span className="step-number">1</span><div><h2>Set up your search</h2><p>Your game version and two aspects from the note.</p></div></div>
-          <div className="mode-switch" role="group" aria-label="Work mode"><button type="button" className={mode === 'quick' ? 'is-active' : ''} onClick={() => setMode('quick')}>Quick search</button><button type="button" className={mode === 'board' ? 'is-active' : ''} onClick={() => setMode('board')}>Research map</button></div>
           <VersionSelect value={version} onChange={changeVersion} />
           {mode === 'quick' && <div className="aspect-selects">
             <AspectSelect caption="From" value={from} aspects={catalog.aspects} onChange={setFrom} />
@@ -485,7 +487,9 @@ function App() {
           {searched && !result && <div className="empty-result">Enable more aspects or reduce the number of empty spaces.</div>}
           {!searched && <div className="empty-result">Select start and end aspects, then click “Find connection”.</div>}
         </aside> : null}
-      </section>
+      </section>}
+
+      {mode === 'essentia' && <EssentiaPlanner />}
 
       {mode === 'board' && <section className="panel research-board" aria-label="Research map"><div className="board-layout"><aside className="board-palette"><div><p className="eyebrow">Palette</p><h2>Aspects</h2></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search aspects for the map" /><p className="palette-help">Drag an aspect onto a free cell.</p><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData('text/aspect', aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}</div></aside><div className="board-main"><div className="board-title"><div className="board-title-heading"><span className="step-number">2</span><div><p className="eyebrow">Knowledge infusion</p><h2>Research map</h2></div></div><label className="board-size">Map radius: <strong>{Math.floor(boardSize / 2)} rings</strong><input type="range" min="2" max="7" value={Math.floor(boardSize / 2)} onChange={(event) => changeBoardSize(Number(event.target.value) * 2 + 1)} /></label><span>{editingObstacles ? 'Click empty cells to place obstacles' : 'Place source aspects, then auto-connect the map'}</span></div><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth, height: (boardSize - 1) * hexRowStep + hexHeight + hexRowStep / 2 }}>{boardRoutes.length > 0 && <svg className="board-route-lines" aria-hidden="true">{boardRoutes.map((route, index) => <polyline key={index} points={route.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + hexWidth / 2},${row * hexRowStep + (column % 2) * hexRowStep / 2 + hexHeight / 2}` }).join(' ')} />)}</svg>}{getBoardCells(boardSize).map(({ row, column }) => {
         const id = cellId(row, column)
@@ -495,7 +499,7 @@ function App() {
         return <div key={id} style={{ left: column * hexColumnStep, top: row * hexRowStep + (column % 2) * hexRowStep / 2 }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} className={`board-cell ${aspect ? 'has-aspect' : ''} ${anchorCells.has(id) ? 'is-anchor' : ''} ${blocked ? 'is-blocked' : ''} ${selectedCells.includes(id) ? 'is-selected' : ''} ${routeNumber !== undefined ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped) }} onClick={() => { if (editingObstacles && !aspect) { setObstacles((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next }); setBoardRoutes([]) } else selectBoardCell(id) }}>{blocked ? <span className="blocked-mark">✕</span> : aspect && <>{routeNumber !== undefined && <span className="cell-order">{routeNumber}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setAnchorCells((previous) => { const next = new Set(previous); next.delete(id); return next }); setSelectedCells((previous) => previous.filter((item) => item !== id)); setBoardRoutes([]) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
       })}</div></div><div className="board-actions" aria-live="polite"><div className="selected-aspects">{selectedCells.length === 0 && <span>Select two aspects for a manual branch</span>}{selectedCells.map((id, index) => <div key={id}><b>{index === 0 ? 'From' : 'To'}</b><AspectIcon aspect={board[id]} /><span>{label(board[id])}</span></div>)}</div><p>{boardMessage}</p><button className="magic-button" type="button" onClick={solveEntireMap}>Auto-connect all <span>✦</span></button><button className="obstacle-button" type="button" onClick={() => setEditingObstacles((current) => !current)}>{editingObstacles ? 'Done editing obstacles' : 'Edit obstacles'}</button><button className="manual-chain-button" type="button" onClick={buildBoardPath}>Connect selected</button><button className="clear-map" type="button" onClick={() => { setBoard({}); setAnchorCells(new Set()); setObstacles(new Set()); setSelectedCells([]); setBoardRoutes([]); setBoardMessage('Map cleared. Drag new aspects onto it.') }}>Clear map</button></div></div></div></section>}
 
-      <section className="panel inventory-panel">
+      {mode !== 'essentia' && <section className="panel inventory-panel">
         <div className="inventory-header"><div className="panel-heading"><span className="step-number">3</span><div><h2>Available aspects</h2><p>Click an aspect to exclude it from the search.</p></div></div><div className="inventory-actions"><button type="button" onClick={() => { setEnabled(new Set(catalog.aspects)); setActiveAddons(new Set(addonEntries.map(([id]) => id))) }}>Select all</button><button type="button" onClick={() => { setEnabled(new Set()); setActiveAddons(new Set()) }}>Deselect all</button></div></div>
         <div className="addons">{addonEntries.map(([id, addon]) => <label key={id}><input type="checkbox" checked={activeAddons.has(id)} onChange={() => toggleAddon(id)} /> <span>{addon.name}</span></label>)}</div>
         <div className="aspect-grid">{catalog.aspects.map((aspect) => {
@@ -503,7 +507,7 @@ function App() {
           const parts = catalog.combinations[aspect]
           return <button className={`aspect-card ${available ? '' : 'is-disabled'}`} type="button" key={aspect} onClick={() => setEnabled((previous) => { const next = new Set(previous); if (available) next.delete(aspect); else next.add(aspect); return next })} title={parts ? `${label(parts[0])} + ${label(parts[1])}` : 'Primal aspect'}><AspectIcon aspect={aspect} muted={!available} /><span>{label(aspect)}</span><small>{aspect}</small>{parts && <em>{parts.map(label).join(' + ')}</em>}</button>
         })}</div>
-      </section>
+      </section>}
 
       <footer>Data and original logic: <a href="https://github.com/ythri/tcresearch/tree/gh-pages" target="_blank" rel="noreferrer">ythri/tcresearch</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Source code: <a href="https://github.com/yovengo/thaumaspects" target="_blank" rel="noreferrer">GitHub</a>.</footer>
     </main>
