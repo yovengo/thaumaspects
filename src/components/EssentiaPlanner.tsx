@@ -3,7 +3,8 @@ import type { KeyboardEvent } from 'react'
 import { buildPlans, itemSimplicity, key as itemKey, planFromLines, prepareItems } from '../lib/essentiaPlanner'
 import type { ItemAspect, PlanLine, Requirement } from '../lib/essentiaPlanner'
 
-type Catalog = { aspects: string[]; items: ItemAspect[]; aspectSource?: { version: string; count: number }; iconSource?: { counts: Record<string, number> }; acquisitionSource?: { version: string; recipeCount: number } }
+type UnprofiledItem = { name: string; registryId: string }
+type Catalog = { aspects: string[]; items: ItemAspect[]; unprofiledItems?: UnprofiledItem[]; aspectSource?: { version: string; count: number; fallbackCounts?: Record<string, number> }; iconSource?: { counts: Record<string, number> }; acquisitionSource?: { version: string; recipeCount: number } }
 type Row = { id: number; aspect: string; amount: number }
 type CatalogFilter = 'allSelected' | 'anySelected' | 'allItems'
 type CatalogSort = 'practical' | 'quantity' | 'name'
@@ -28,6 +29,10 @@ function readAvailability(): Availability {
 }
 
 const displayItemName = (name: string) => name.replace(/§[0-9a-fk-or]/gi, '')
+const searchRank = (name: string, query: string) => {
+  const normalized = displayItemName(name).toLocaleLowerCase()
+  return normalized === query ? 0 : normalized.startsWith(query) ? 1 : 2
+}
 const aspectWord = (count: number) => count % 10 === 1 && count % 100 !== 11 ? 'аспект' : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'аспекта' : 'аспектов'
 const aspectLabel = (aspect: string) => aspect.replace(/^./, (letter) => letter.toUpperCase())
 
@@ -103,10 +108,16 @@ export default function EssentiaPlanner() {
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('anySelected')
   const [catalogSort, setCatalogSort] = useState<CatalogSort>('practical')
   const [query, setQuery] = useState('')
+  const [sourceQuery, setSourceQuery] = useState('')
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false)
+  const [sourceVisibleCount, setSourceVisibleCount] = useState(12)
   const [visibleCount, setVisibleCount] = useState(30)
   const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set())
   const [availability, setAvailability] = useState<Availability>(readAvailability)
   const resultRef = useRef<HTMLDivElement>(null)
+  const sourceSearchRef = useRef<HTMLInputElement>(null)
+  const catalogSearchRef = useRef<HTMLInputElement>(null)
+  const catalogRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     try { localStorage.setItem(availabilityStorageKey, JSON.stringify(availability)) } catch { /* Private mode can block storage. */ }
@@ -116,7 +127,7 @@ export default function EssentiaPlanner() {
     const controller = new AbortController()
     fetch('/item-aspects-gtnh.json', { signal: controller.signal })
       .then((response) => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json() as Promise<Catalog> })
-      .then((data) => setCatalog({ aspects: data.aspects, items: prepareItems(data.items), aspectSource: data.aspectSource, iconSource: data.iconSource, acquisitionSource: data.acquisitionSource }))
+      .then((data) => setCatalog({ aspects: data.aspects, items: prepareItems(data.items), unprofiledItems: data.unprofiledItems, aspectSource: data.aspectSource, iconSource: data.iconSource, acquisitionSource: data.acquisitionSource }))
       .catch((error: unknown) => { if (error instanceof Error && error.name !== 'AbortError') setLoadError(true) })
     return () => controller.abort()
   }, [])
@@ -161,9 +172,13 @@ export default function EssentiaPlanner() {
         ? requestedAspects.every((aspect) => (item.aspects[aspect] ?? 0) > 0)
         : requestedAspects.some((aspect) => (item.aspects[aspect] ?? 0) > 0)
     }).sort((a, b) => {
-      const preferredOrder = Number(preferences.preferred.has(itemKey(b))) - Number(preferences.preferred.has(itemKey(a)))
+      if (normalized) {
+        const relevance = searchRank(a.name, normalized) - searchRank(b.name, normalized)
+        if (relevance) return relevance
+      }
+      const preferredOrder = preferences.preferred.size ? Number(preferences.preferred.has(itemKey(b))) - Number(preferences.preferred.has(itemKey(a))) : 0
       if (preferredOrder) return preferredOrder
-      const excludedOrder = Number(preferences.excluded.has(itemKey(a))) - Number(preferences.excluded.has(itemKey(b)))
+      const excludedOrder = preferences.excluded.size ? Number(preferences.excluded.has(itemKey(a))) - Number(preferences.excluded.has(itemKey(b))) : 0
       if (excludedOrder) return excludedOrder
       if (catalogSort === 'name') return displayItemName(a.name).localeCompare(displayItemName(b.name))
       const aCount = requestedAspects.every((aspect) => (a.aspects[aspect] ?? 0) > 0) ? countForItem(a, required) ?? Infinity : Infinity
@@ -175,6 +190,33 @@ export default function EssentiaPlanner() {
         || bCoverage - aCoverage || aCount - bCount || a.name.localeCompare(b.name)
     })
   }, [catalog, query, catalogFilter, catalogSort, required, preferences])
+  const sourceMatches = useMemo(() => {
+    if (!catalog || Object.keys(required).length === 0) return []
+    const normalized = sourceQuery.trim().toLocaleLowerCase()
+    return catalog.items.filter((item) =>
+      Object.keys(required).some((aspect) => (item.aspects[aspect] ?? 0) > 0) &&
+      (!normalized || `${displayItemName(item.name)} ${item.registryId ?? ''}`.toLocaleLowerCase().includes(normalized)))
+      .sort((a, b) => {
+        if (normalized) {
+          const relevance = searchRank(a.name, normalized) - searchRank(b.name, normalized)
+          if (relevance) return relevance
+        }
+        const preferredOrder = preferences.preferred.size ? Number(preferences.preferred.has(itemKey(b))) - Number(preferences.preferred.has(itemKey(a))) : 0
+        if (preferredOrder) return preferredOrder
+        const excludedOrder = preferences.excluded.size ? Number(preferences.excluded.has(itemKey(a))) - Number(preferences.excluded.has(itemKey(b))) : 0
+        if (excludedOrder) return excludedOrder
+        return itemSimplicity(a, preferences) - itemSimplicity(b, preferences) || a.name.localeCompare(b.name)
+      })
+  }, [catalog, required, sourceQuery, preferences])
+  const unprofiledMatches = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase()
+    if (!catalog?.unprofiledItems || normalized.length < 2) return []
+    return catalog.unprofiledItems.filter((item) =>
+      `${displayItemName(item.name)} ${item.registryId}`.toLocaleLowerCase().includes(normalized))
+      .sort((a, b) => Number(displayItemName(b.name).toLocaleLowerCase() === normalized)
+        - Number(displayItemName(a.name).toLocaleLowerCase() === normalized)
+        || a.name.localeCompare(b.name))
+  }, [catalog, query])
 
   const preferItem = (item: ItemAspect) => {
     const id = itemKey(item)
@@ -228,6 +270,19 @@ export default function EssentiaPlanner() {
     setSelectedId(id)
     requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
+  const openSourcePicker = () => {
+    setSourcePickerOpen(true)
+    requestAnimationFrame(() => sourceSearchRef.current?.focus())
+  }
+  const openCatalogSearch = () => {
+    setQuery(sourceQuery)
+    setCatalogFilter('anySelected')
+    setVisibleCount(30)
+    requestAnimationFrame(() => {
+      catalogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      catalogSearchRef.current?.focus({ preventScroll: true })
+    })
+  }
   const toggleExpanded = (key: string) => setExpandedItems((previous) => {
     const next = new Set(previous)
     if (next.has(key)) next.delete(key)
@@ -254,20 +309,33 @@ export default function EssentiaPlanner() {
         {catalog && requestedAspects.length === 0 && <div className="ess-state">Укажите количество хотя бы одного аспекта.</div>}
         {catalog && requestedAspects.length > 0 && !selected && <div className="ess-state">Подходящий набор не найден. Попробуйте другие аспекты.</div>}
         {selected && <><div className="ess-picked-head"><span className="ess-pick-label">{selectedId === 'custom' ? 'Ваш выбор' : selected.title}</span><strong>{selected.itemCount.toLocaleString('ru-RU')} <small>шт.</small></strong></div>
-          <div className="ess-picked-items">{selected.lines.map(({ item, count }) => <div className="ess-picked-item" key={itemKey(item)}><ItemIcon item={item} large /><div><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong><span>{Object.entries(item.aspects).map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')} за 1 шт.</span></div>{selectedId === 'custom' ? <div className="ess-count-stepper"><button type="button" aria-label={`Уменьшить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count - 1)}>−</button><b>{count}</b><button type="button" aria-label={`Увеличить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count + 1)}>+</button></div> : <div className="ess-item-tools"><b className="ess-item-count">× {count}</b><button type="button" onClick={() => excludeItem(item)}>Нет под рукой</button></div>}</div>)}</div>
+          <div className="ess-picked-items">{selected.lines.map(({ item, count }) => <div className="ess-picked-item" key={itemKey(item)}><ItemIcon item={item} large /><div><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>{item.aspectVersion && <small className="ess-aspect-source" title="Профиль взят из более ранней версии GTNH и не подтверждён для 2.9">GTNH {item.aspectVersion}</small>}<span>{Object.entries(item.aspects).map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')} за 1 шт.</span></div>{selectedId === 'custom' ? <div className="ess-count-stepper"><button type="button" aria-label={`Уменьшить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count - 1)}>−</button><b>{count}</b><button type="button" aria-label={`Увеличить ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count + 1)}>+</button></div> : <div className="ess-item-tools"><b className="ess-item-count">× {count}</b><button type="button" onClick={() => excludeItem(item)}>Нет под рукой</button></div>}</div>)}</div>
+          {selected.lines.some(({ item }) => item.aspectVersion) && <p className="ess-source-note">В этом наборе есть профили GTNH 2.8.0. В GTNH 2.9 их значения пока не подтверждены.</p>}
           <div className="ess-progress-list">{requestedAspects.map((aspect) => { const amount = selected.produced[aspect] ?? 0; const target = required[aspect]; return <div className="ess-progress" key={aspect}><AspectIcon name={aspect} /><span>{aspectLabel(aspect)}</span><b className={amount < target ? 'is-short' : ''}>{amount} / {target}</b><div className="ess-progress-track"><span style={{ width: `${Math.min(100, amount / target * 100)}%` }} /></div></div> })}</div>
           {shortage.length > 0 && <div className="ess-shortage"><strong>Эссенции пока не хватает</strong><span>{shortage.map(([aspect, amount]) => `${aspectLabel(aspect)}: ещё ${amount}`).join(' · ')}</span><small>Добавьте предметы из каталога или увеличьте их количество.</small></div>}
           <div className="ess-result-meta"><span>{selected.extra === 0 ? 'Без лишней эссенции' : `Лишняя эссенция: ${selected.extra}`}</span><span>{selected.lines.length} {selected.lines.length === 1 ? 'вид предмета' : 'вида предметов'}</span></div>
           {Object.entries(selected.produced).filter(([aspect]) => !required[aspect]).length > 0 && <div className="ess-other-aspects"><span>Побочные аспекты</span>{Object.entries(selected.produced).filter(([aspect]) => !required[aspect]).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}</div>}
         </>}
+        {catalog && requestedAspects.length > 0 && <div className="ess-source-browser">
+          <button className="ess-source-toggle" type="button" aria-expanded={sourcePickerOpen} onClick={() => sourcePickerOpen ? setSourcePickerOpen(false) : openSourcePicker()}>
+            <span>Найти другой предмет</span><small>{sourceMatches.length.toLocaleString('ru-RU')} источников по выбранным аспектам</small><span aria-hidden="true">{sourcePickerOpen ? '−' : '+'}</span>
+          </button>
+          {sourcePickerOpen && <div className="ess-source-content">
+            <label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input ref={sourceSearchRef} type="search" value={sourceQuery} onChange={(event) => { setSourceQuery(event.target.value); setSourceVisibleCount(12) }} placeholder="Название или ID предмета" aria-label="Найти источник эссенции" />{sourceQuery && <button type="button" aria-label="Очистить поиск источника" onClick={() => { setSourceQuery(''); setSourceVisibleCount(12); sourceSearchRef.current?.focus() }}>×</button>}</label>
+            <p>{sourceQuery ? `Найдено ${sourceMatches.length.toLocaleString('ru-RU')}` : 'Показаны самые доступные источники. Поиск проверяет весь каталог, включая профили GTNH 2.8.0.'}</p>
+            <div className="ess-source-list">{sourceMatches.slice(0, sourceVisibleCount).map((item) => <div className="ess-source-row" key={itemKey(item)}><ItemIcon item={item} /><div><strong>{displayItemName(item.name)}</strong><small>{Object.entries(item.aspects).filter(([aspect]) => required[aspect]).map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')}{item.aspectVersion ? ` · GTNH ${item.aspectVersion}` : ''}</small></div><button type="button" disabled={preferences.excluded.has(itemKey(item))} onClick={() => chooseItem(item)}>{countForItem(item, required)} шт. →</button></div>)}</div>
+            {sourceMatches.length === 0 && <p>Совпадений нет. Попробуйте другое название или ID.</p>}
+            <div className="ess-source-footer">{sourceVisibleCount < sourceMatches.length && <button type="button" onClick={() => setSourceVisibleCount((count) => count + 12)}>Показать ещё 12</button>}<button type="button" onClick={openCatalogSearch}>Открыть полный каталог ↓</button></div>
+          </div>}
+        </div>}
       </div>
     </section>
 
-    {plans.length > 1 && <section className="panel ess-alternatives" aria-label="Альтернативные наборы"><div className="ess-section-head"><span className="step-number">3</span><div><h3>Выберите другой вариант</h3><p>Каждая карточка заменяет весь текущий набор. Нажмите, чтобы увидеть подробный расчёт выше.</p></div></div><div className="ess-alternative-grid">{plans.map((plan) => <button type="button" className={`ess-alternative ${selected?.id === plan.id ? 'is-active' : ''}`} key={plan.id} onClick={() => selectPlan(plan.id)}><span className="ess-alternative-icons">{plan.lines.slice(0, 2).map(({ item }) => <ItemIcon key={itemKey(item)} item={item} />)}</span><span className="ess-alternative-copy"><strong>{plan.title}</strong><small>{plan.lines.map(({ item, count }) => `${count}× ${displayItemName(item.name)}`).join(' + ')}</small></span><em>{plan.extra === 0 ? 'без избытка' : `+${plan.extra} избытка`}</em></button>)}</div></section>}
+    {plans.length > 1 && <section className="panel ess-alternatives" aria-label="Альтернативные наборы"><div className="ess-section-head"><span className="step-number">3</span><div><h3>Выберите другой вариант</h3><p>Каждая карточка заменяет весь текущий набор. Нажмите, чтобы увидеть подробный расчёт выше.</p></div></div><div className="ess-alternative-grid">{plans.map((plan) => <button type="button" className={`ess-alternative ${selected?.id === plan.id ? 'is-active' : ''}`} key={plan.id} onClick={() => selectPlan(plan.id)}><span className="ess-alternative-icons">{plan.lines.slice(0, 2).map(({ item }) => <ItemIcon key={itemKey(item)} item={item} />)}</span><span className="ess-alternative-copy"><strong>{plan.title}</strong><small>{plan.lines.map(({ item, count }) => `${count}× ${displayItemName(item.name)}${item.aspectVersion ? ` [${item.aspectVersion}]` : ''}`).join(' + ')}</small></span><em>{plan.extra === 0 ? 'без избытка' : `+${plan.extra} избытка`}</em></button>)}</div></section>}
 
-    <section className="panel ess-catalog" aria-label="Полный каталог предметов"><div className="ess-catalog-header"><div className="ess-section-head"><span className="step-number">4</span><div><h3>Весь датасет предметов</h3><p>Найдите предмет и отметьте ☆, если он у вас в избытке. Подбор запомнит ваш выбор. Предмет из результата можно исключить кнопкой «Нет под рукой».</p></div></div><span className="ess-catalog-total">{catalog?.items.length.toLocaleString('ru-RU') ?? '—'} записей</span></div>
+    <section className="panel ess-catalog" aria-label="Полный каталог предметов" ref={catalogRef}><div className="ess-catalog-header"><div className="ess-section-head"><span className="step-number">4</span><div><h3>Весь датасет предметов</h3><p>Найдите предмет и отметьте ☆, если он у вас в избытке. Подбор запомнит ваш выбор. Предмет из результата можно исключить кнопкой «Нет под рукой».</p></div></div><span className="ess-catalog-total">{catalog?.items.length.toLocaleString('ru-RU') ?? '—'} записей</span></div>
       {(availability.preferred.length > 0 || availability.excluded.length > 0) && <div className="ess-availability-panel"><strong>Мои источники</strong><div>{availability.preferred.map((id) => { const item = availabilityItems.get(id); return item && <button type="button" key={id} onClick={() => preferItem(item)} aria-label={`Убрать приоритет ${displayItemName(item.name)}`}>★ {displayItemName(item.name)} <span>×</span></button> })}{availability.excluded.map((id) => { const item = availabilityItems.get(id); return item && <button type="button" className="is-excluded" key={id} onClick={() => restoreItem(item)} aria-label={`Вернуть ${displayItemName(item.name)} в подбор`}>↶ {displayItemName(item.name)} <span>вернуть</span></button> })}</div></div>}
-      <div className="ess-catalog-toolbar"><label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Поиск предмета или ID: Coal, minecraft:coal…" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(30) }} aria-label="Поиск по предметам" />{query && <button type="button" aria-label="Очистить поиск" onClick={() => { setQuery(''); setVisibleCount(30) }}>×</button>}</label><label className="ess-sort"><span>Сортировка</span><select value={catalogSort} onChange={(event) => { setCatalogSort(event.target.value as CatalogSort); setVisibleCount(30) }}><option value="practical">Проще получить</option><option value="quantity">Меньше предметов</option><option value="name">По названию</option></select></label></div>
+      <div className="ess-catalog-toolbar"><label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input ref={catalogSearchRef} type="search" placeholder="Поиск предмета или ID: Coal, minecraft:coal…" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(30) }} aria-label="Поиск по предметам" />{query && <button type="button" aria-label="Очистить поиск" onClick={() => { setQuery(''); setVisibleCount(30) }}>×</button>}</label><label className="ess-sort"><span>Сортировка</span><select value={catalogSort} onChange={(event) => { setCatalogSort(event.target.value as CatalogSort); setVisibleCount(30) }}><option value="practical">Проще получить</option><option value="quantity">Меньше предметов</option><option value="name">По названию</option></select></label></div>
       <div className="ess-filter-tabs" role="group" aria-label="Фильтр предметов"><button type="button" className={catalogFilter === 'allSelected' ? 'is-active' : ''} onClick={() => { setCatalogFilter('allSelected'); setVisibleCount(30) }}>Все нужные аспекты</button><button type="button" className={catalogFilter === 'anySelected' ? 'is-active' : ''} onClick={() => { setCatalogFilter('anySelected'); setVisibleCount(30) }}>Хотя бы один</button><button type="button" className={catalogFilter === 'allItems' ? 'is-active' : ''} onClick={() => { setCatalogFilter('allItems'); setVisibleCount(30) }}>Весь каталог</button></div>
       <div className="ess-catalog-summary"><strong>{filteredItems.length.toLocaleString('ru-RU')} записей</strong><span>{catalogFilter === 'allSelected' ? 'содержат каждый выбранный аспект' : catalogFilter === 'anySelected' ? 'содержат один или несколько выбранных аспектов' : 'во всём датасете'}</span></div>
       {catalog && <div className="ess-icon-legend"><span className="ess-icon-legend-mark">Aa</span><span>Для {catalog.iconSource?.counts.missing ?? 0} предметов источник не содержит иконку: вместо неё показаны инициалы. Остальные изображения взяты из игровых данных.</span></div>}
@@ -284,7 +352,7 @@ export default function EssentiaPlanner() {
         return <div className={`ess-catalog-item ${isExcluded ? 'is-excluded' : ''}`} key={key}>
           <ItemIcon item={item} />
           <div className="ess-catalog-item-body">
-            <div className="ess-catalog-name"><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>{variantLabels.has(key) && <small>{variantLabels.get(key)}</small>}{item.registryId && <small title={item.registryId}>{item.registryId.split(':')[0]}</small>}<button className={`ess-availability-button ${isPreferred ? 'is-preferred' : ''}`} type="button" aria-label={isExcluded ? `Вернуть ${displayItemName(item.name)} в подбор` : isPreferred ? `Убрать приоритет ${displayItemName(item.name)}` : `Предпочитать ${displayItemName(item.name)}`} aria-pressed={isPreferred} title={isExcluded ? 'Вернуть в подбор' : isPreferred ? 'Убрать отметку «Есть много»' : 'Есть много — предпочитать в расчёте'} onClick={() => isExcluded ? restoreItem(item) : preferItem(item)}>{isExcluded ? '↶' : isPreferred ? '★' : '☆'}</button></div>
+            <div className="ess-catalog-name"><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>{variantLabels.has(key) && <small>{variantLabels.get(key)}</small>}{item.aspectVersion && <small className="ess-aspect-source" title="Профиль взят из более ранней версии GTNH и не подтверждён для 2.9">GTNH {item.aspectVersion}</small>}{item.registryId && <small title={item.registryId}>{item.registryId.split(':')[0]}</small>}<button className={`ess-availability-button ${isPreferred ? 'is-preferred' : ''}`} type="button" aria-label={isExcluded ? `Вернуть ${displayItemName(item.name)} в подбор` : isPreferred ? `Убрать приоритет ${displayItemName(item.name)}` : `Предпочитать ${displayItemName(item.name)}`} aria-pressed={isPreferred} title={isExcluded ? 'Вернуть в подбор' : isPreferred ? 'Убрать отметку «Есть много»' : 'Есть много — предпочитать в расчёте'} onClick={() => isExcluded ? restoreItem(item) : preferItem(item)}>{isExcluded ? '↶' : isPreferred ? '★' : '☆'}</button></div>
             <div className="ess-catalog-aspects">{(expanded ? aspectEntries : aspectEntries.slice(0, 6)).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}{aspectEntries.length > 6 && <button className="ess-more-aspects" type="button" aria-expanded={expanded} onClick={() => toggleExpanded(key)}>{expanded ? 'Свернуть' : `+${aspectEntries.length - 6} ${aspectWord(aspectEntries.length - 6)}`}</button>}</div>
           </div>
           <div className="ess-catalog-action">
@@ -292,9 +360,10 @@ export default function EssentiaPlanner() {
             <button type="button" disabled={!overlap || count === null || isExcluded} onClick={() => chooseItem(item)}>{isExcluded ? 'Исключён' : !overlap ? 'Не подходит' : count === null ? 'Готово' : coversAll ? 'Выбрать набор' : `Добавить ${count} шт.`}</button>
           </div>
         </div>
-      })}{catalog && filteredItems.length === 0 && <p className="ess-no-results">Ничего не найдено. Попробуйте другое название или фильтр «Весь каталог».</p>}</div>
+      })}{catalog && filteredItems.length === 0 && unprofiledMatches.length === 0 && <p className="ess-no-results">Ничего не найдено. Попробуйте другое название или фильтр «Весь каталог».</p>}</div>
       {visibleCount < filteredItems.length && <button className="ess-show-more" type="button" onClick={() => setVisibleCount((count) => count + 30)}>Показать ещё 30 <span>↓</span></button>}
-      <div className="ess-data-note"><strong>О данных и иконках</strong><p>Каталог построен из {catalog?.aspectSource?.count.toLocaleString('ru-RU') ?? '—'} зарегистрированных рецептов плавки в эссенцию GTNH {catalog?.aspectSource?.version ?? ''}. У каждого предмета указан ID; аспекты и их количество взяты из выхода рецепта. Наличие предмета в NEI само по себе не означает, что он плавится в печи. Трудоёмкость оценивается по {catalog?.acquisitionSource?.recipeCount.toLocaleString('ru-RU') ?? '—'} рецептам этой же версии и остаётся приблизительной. Иконки взяты из <a href="https://github.com/ShadowTheAge/gtnh-2.7.4" target="_blank" rel="noreferrer">атласа GTNH</a> и <a href="https://github.com/Samiracle64/gtnh-factory-flow" target="_blank" rel="noreferrer">индекса ресурсов GTNH 2.9</a>.</p></div>
+      {unprofiledMatches.length > 0 && <details className="ess-unprofiled" open={filteredItems.length === 0}><summary>{unprofiledMatches.length.toLocaleString('ru-RU')} предметов найдено в GTNH 2.9 без профиля аспектов</summary><p>Они существуют в сборке, но текущая выгрузка не сообщает, что даст их плавка. Поэтому они не участвуют в расчёте.</p><div>{unprofiledMatches.slice(0, 24).map((item) => <div className="ess-unprofiled-row" key={item.registryId}><strong>{displayItemName(item.name)}</strong><small>{item.registryId}</small></div>)}</div>{unprofiledMatches.length > 24 && <small>Показаны первые 24 совпадения. Уточните название в поиске.</small>}</details>}
+      <div className="ess-data-note"><strong>О данных и иконках</strong><p>Каталог содержит {catalog?.aspectSource?.count.toLocaleString('ru-RU') ?? '—'} профилей из GTNH {catalog?.aspectSource?.version ?? ''} и {(catalog?.aspectSource?.fallbackCounts?.['2.8.0'] ?? 0).toLocaleString('ru-RU')} дополнительных профилей из GTNH 2.8.0. Совпадение проверено по ID, моду и названию; данные 2.9 имеют приоритет. Добавленные профили участвуют в расчёте и отмечены версией, но их поведение в печи 2.9 не подтверждено. Предметы без профиля доступны только в поиске. Трудоёмкость оценивается по {catalog?.acquisitionSource?.recipeCount.toLocaleString('ru-RU') ?? '—'} машинным и фермерским рецептам GTNH 2.9; обычные рецепты верстака в этой выгрузке отсутствуют. Иконки взяты из <a href="https://github.com/ShadowTheAge/gtnh-2.7.4" target="_blank" rel="noreferrer">атласа GTNH</a> и <a href="https://github.com/Samiracle64/gtnh-factory-flow" target="_blank" rel="noreferrer">индекса ресурсов GTNH 2.9</a>.</p></div>
     </section>
   </div>
 }

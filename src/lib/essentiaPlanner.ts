@@ -6,6 +6,7 @@ export type ItemAspect = {
   aspects: Record<string, number>
   icon?: ItemIconData
   registryId?: string
+  aspectVersion?: string
   acquisition?: Record<string, [number, number]>
 }
 export type Requirement = Record<string, number>
@@ -13,13 +14,22 @@ export type PlanLine = { item: ItemAspect; count: number }
 export type Plan = { id: string; title: string; lines: PlanLine[]; produced: Requirement; remaining: Requirement; itemCount: number; extra: number }
 export type PlannerPreferences = { preferred?: ReadonlySet<string>; excluded?: ReadonlySet<string>; stage?: string }
 
+const effortCache = new WeakMap<ItemAspect, Map<string, number>>()
+
 export function itemEffort(item: ItemAspect, preferences: PlannerPreferences = {}) {
-  if (preferences.preferred?.has(key(item))) return 0.15
-  const acquisition = item.acquisition?.[preferences.stage ?? 'NONE']
+  if (preferences.preferred?.size && preferences.preferred.has(key(item))) return 0.15
+  const stage = preferences.stage ?? 'NONE'
+  const cached = effortCache.get(item)?.get(stage)
+  if (cached !== undefined) return cached
+  const acquisition = item.acquisition?.[stage]
   const recipeScore = acquisition?.[0]
   if (recipeScore === undefined && item.acquisition) return 1000
   const concentration = Math.max(0, Math.max(...Object.values(item.aspects)) - 2)
-  return Math.max(0.15, recipeScore ?? 20) + (acquisition?.[1] ?? 0) * 4 + concentration * 1.5
+  const effort = Math.max(0.15, recipeScore ?? 20) + (acquisition?.[1] ?? 0) * 4 + concentration * 1.5
+  const scores = effortCache.get(item) ?? new Map<string, number>()
+  scores.set(stage, effort)
+  effortCache.set(item, scores)
+  return effort
 }
 
 export const itemSimplicity = (item: ItemAspect, preferences: PlannerPreferences = {}) => itemEffort(item, preferences)
@@ -64,7 +74,7 @@ function simplePool(candidates: ItemAspect[], required: Requirement, preferences
     }).slice(0, 40)
     return [...byEffort, ...byYield]
   })
-  return [...new Set([...shortlist, ...candidates.filter((item) => preferences.preferred?.has(key(item)))])]
+  return [...new Set([...shortlist, ...(preferences.preferred?.size ? candidates.filter((item) => preferences.preferred?.has(key(item))) : [])])]
 }
 
 function simplePlanCounts(candidates: ItemAspect[], required: Requirement, preferences: PlannerPreferences): Map<ItemAspect, number> | null {
@@ -122,7 +132,7 @@ function simplePlanCounts(candidates: ItemAspect[], required: Requirement, prefe
 function makePlan(items: ItemAspect[], required: Requirement, title: string, strategy: 'simple' | 'fewest' | 'clean', preferences: PlannerPreferences): Plan | null {
   const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0)
   const candidates = items.filter((item) =>
-    !preferences.excluded?.has(key(item)) && itemEffort(item, preferences) < 1000 &&
+    !(preferences.excluded?.size && preferences.excluded.has(key(item))) && itemEffort(item, preferences) < 1000 &&
     aspects.some((aspect) => (item.aspects[aspect] ?? 0) > 0))
   if (aspects.some((aspect) => !candidates.some((item) => (item.aspects[aspect] ?? 0) > 0))) return null
 
@@ -212,7 +222,7 @@ export function buildPlans(items: ItemAspect[], required: Requirement, preferenc
       const deficit = aspects.filter((aspect) => (otherPlan.remaining[aspect] ?? 0) > 0)
       if (deficit.length === 0) continue
       const replacements = items.filter((item) =>
-        !preferences.excluded?.has(key(item)) &&
+        !(preferences.excluded?.size && preferences.excluded.has(key(item))) &&
         itemEffort(item, preferences) < 1000 &&
         item.name !== line.item.name &&
         deficit.every((aspect) => (item.aspects[aspect] ?? 0) > 0) &&
