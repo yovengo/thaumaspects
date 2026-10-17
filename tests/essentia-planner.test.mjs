@@ -48,3 +48,16 @@ test('favorite-only preview remains a valid option after the full search', () =>
   checkCoverage(plans, required)
   assert.ok(plans.some((plan) => plan.id === favoritePlan.id))
 })
+
+test('practical multi-aspect mix survives beam limits and uses simple preferred sources', () => {
+  const required = { potentia: 40, motus: 80, volatus: 16 }
+  const coal = items.find((item) => item.registryId === 'minecraft:coal')
+  const redstone = items.find((item) => item.registryId === 'minecraft:redstone')
+  assert.ok(coal && redstone)
+  const preferences = { stage: 'NONE', preferred: new Set([key(coal), key(redstone)]) }
+  const plans = buildPlans(items, required, preferences)
+  checkCoverage(plans, required)
+  assert.equal(plans[0].title, 'Practical items')
+  assert.ok(plans[0].lines.some(({ item, count }) => item.registryId === 'minecraft:redstone' && count === 20))
+  assert.ok(plans[0].lines.every(({ item }) => !['minecraft:coal_block', 'minecraft:quartz'].includes(item.registryId)))
+})

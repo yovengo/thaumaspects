@@ -87,6 +87,39 @@ function simplePlanCounts(candidates: ItemAspect[], required: Requirement, prefe
   const pool = simplePool(candidates, required, preferences)
   if (aspects.some((aspect) => !pool.some((item) => (item.aspects[aspect] ?? 0) > 0))) return null
   const byAspect = new Map(aspects.map((aspect) => [aspect, pool.filter((item) => (item.aspects[aspect] ?? 0) > 0)]))
+  const orders = [
+    [...aspects].sort((a, b) => byAspect.get(a)!.length - byAspect.get(b)!.length || a.localeCompare(b)),
+    [...aspects].sort((a, b) => required[b] - required[a] || a.localeCompare(b)),
+    [...aspects].sort((a, b) => required[a] - required[b] || a.localeCompare(b)),
+  ]
+  let seed: SearchState | null = null
+  for (const order of orders) {
+    const remaining = { ...required }
+    const counts = new Map<ItemAspect, number>()
+    let cost = 0
+    for (const aspect of order) {
+      if (remaining[aspect] <= 0) continue
+      let choice: { item: ItemAspect; count: number; cost: number; score: number } | null = null
+      for (const item of byAspect.get(aspect)!) {
+        if ([...counts.keys()].some((chosen) => chosen.name === item.name && key(chosen) !== key(item))) continue
+        const count = Math.ceil(remaining[aspect] / item.aspects[aspect])
+        const gain = aspects.reduce((sum, name) =>
+          sum + Math.min(remaining[name], (item.aspects[name] ?? 0) * count), 0)
+        const addedCost = additionCost(item, count, remaining, !counts.has(item), preferences)
+        const score = addedCost / gain
+        if (!choice || score < choice.score || score === choice.score && addedCost < choice.cost) {
+          choice = { item, count, cost: addedCost, score }
+        }
+      }
+      if (!choice) break
+      counts.set(choice.item, (counts.get(choice.item) ?? 0) + choice.count)
+      cost += choice.cost
+      for (const name of aspects) remaining[name] = Math.max(0, remaining[name] - (choice.item.aspects[name] ?? 0) * choice.count)
+    }
+    if (aspects.every((aspect) => remaining[aspect] === 0) && (!seed || cost < seed.cost)) {
+      seed = { remaining, counts, cost }
+    }
+  }
   const minimumEffortPerAspect = new Map(aspects.map((aspect) => [aspect,
     Math.min(...byAspect.get(aspect)!.map((item) => itemEffort(item, preferences) / item.aspects[aspect]))]))
   const lowerBound = (remaining: Requirement) => Math.max(0, ...aspects.map((aspect) => {
@@ -95,7 +128,7 @@ function simplePlanCounts(candidates: ItemAspect[], required: Requirement, prefe
   }))
   const priority = (state: SearchState) => state.cost + lowerBound(state.remaining)
   let beam: SearchState[] = [{ remaining: { ...required }, counts: new Map(), cost: 0 }]
-  let best: SearchState | null = null
+  let best: SearchState | null = seed
   if (initialCounts?.size) {
     const remaining = { ...required }
     let cost = 0
@@ -103,7 +136,7 @@ function simplePlanCounts(candidates: ItemAspect[], required: Requirement, prefe
       cost += additionCost(item, count, remaining, true, preferences)
       for (const aspect of aspects) remaining[aspect] = Math.max(0, remaining[aspect] - (item.aspects[aspect] ?? 0) * count)
     }
-    if (aspects.every((aspect) => remaining[aspect] === 0)) best = { remaining, counts: initialCounts, cost }
+    if (aspects.every((aspect) => remaining[aspect] === 0) && (!best || cost < best.cost)) best = { remaining, counts: initialCounts, cost }
   }
   const width = aspects.length <= 4 ? 80 : 32
   const depthLimit = Math.min(20, aspects.length * 4 + 4)
