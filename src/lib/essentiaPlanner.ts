@@ -201,10 +201,10 @@ function makePlan(items: ItemAspect[], required: Requirement, title: string, str
 export function buildPlans(items: ItemAspect[], required: Requirement, preferences: PlannerPreferences = {}): Plan[] {
   if (!Object.values(required).some((amount) => amount > 0)) return []
   const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0)
-  const simple = makePlan(items, required, 'Простые предметы', 'simple', preferences)
-  const clean = makePlan(items, required, 'Меньше лишней эссенции', 'clean', preferences)
+  const simple = makePlan(items, required, 'Practical items', 'simple', preferences)
+  const clean = makePlan(items, required, 'Less excess essentia', 'clean', preferences)
   const totalNeeded = Object.values(required).reduce((sum, amount) => sum + Math.max(0, amount), 0)
-  const fewest = makePlan(items, required, 'Меньше предметов', 'fewest', preferences)
+  const fewest = makePlan(items, required, 'Fewest items', 'fewest', preferences)
   const planCost = (plan: Plan) => plan.lines.reduce((sum, line) => sum + itemEffort(line.item, preferences) * line.count, 0)
     + plan.extra * 0.2 + plan.lines.length * 4
   const simpleCost = simple ? planCost(simple) : Infinity
@@ -236,7 +236,7 @@ export function buildPlans(items: ItemAspect[], required: Requirement, preferenc
           combined.set(id, { item: entry.item, count: (previous?.count ?? 0) + entry.count })
         }
         const lines = [...combined.values()].sort((a, b) => b.count - a.count || a.item.name.localeCompare(b.item.name))
-        const plan = planFromLines(lines, required, `Вместо ${line.item.name}`)
+        const plan = planFromLines(lines, required, `Instead of ${line.item.name}`)
         plan.id = lines.map(({ item: source, count: amount }) => `${key(source)}×${amount}`).sort().join(';')
         return plan
       }).filter((plan) => aspects.every((aspect) => plan.remaining[aspect] === 0) && plan.extra <= maximumExtra)
@@ -259,7 +259,7 @@ export function findAnalogues(items: ItemAspect[], target: ItemAspect, limit = 4
     .sort((a, b) => itemSimplicity(a) - itemSimplicity(b) || a.name.localeCompare(b.name)).slice(0, limit)
 }
 
-export function planFromLines(lines: PlanLine[], required: Requirement, title = 'Мой набор'): Plan {
+export function planFromLines(lines: PlanLine[], required: Requirement, title = 'My mix'): Plan {
   const produced: Requirement = {}
   lines.forEach(({ item, count }) => Object.entries(item.aspects).forEach(([aspect, amount]) => {
     produced[aspect] = (produced[aspect] ?? 0) + amount * count

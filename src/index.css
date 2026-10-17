@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Uncial+Antiqua&display=swap');
-
-:root { font-family: Manrope, Arial, sans-serif; color: #eee6ce; background: #16120e; font-synthesis: none; text-rendering: optimizeLegibility; }
-* { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -15%, #5b4030 0, #211812 37%, #12100d 75%); }
-button, select, input { font: inherit; }
-button { cursor: pointer; }
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+:root{font-family:Manrope,Arial,sans-serif;color:#f2edf1;background:#17131a;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-width:320px;background:radial-gradient(circle at 65% -20%,#302438 0,#1b1720 38%,#151218 76%)}button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:default}a{color:inherit}
+:focus-visible{outline:2px solid #e5c27e;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}

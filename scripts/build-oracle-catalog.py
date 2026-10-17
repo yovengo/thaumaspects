@@ -10,6 +10,8 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
+import sys
 import unicodedata
 from urllib.request import Request, urlopen
 
@@ -220,6 +222,7 @@ def main():
             futures = [pool.submit(download_icon, path, output_dir) for path in missing]
             for future in as_completed(futures):
                 future.result()
+        subprocess.run([sys.executable, str(ROOT / 'scripts/build-rendered-icon-bounds.py')], check=True)
 
 
 if __name__ == '__main__':
