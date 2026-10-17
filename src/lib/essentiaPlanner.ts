@@ -15,6 +15,7 @@ export type Plan = { id: string; title: string; lines: PlanLine[]; produced: Req
 export type PlannerPreferences = { preferred?: ReadonlySet<string>; excluded?: ReadonlySet<string>; stage?: string }
 
 const effortCache = new WeakMap<ItemAspect, Map<string, number>>()
+const keyCache = new WeakMap<ItemAspect, string>()
 
 export function itemEffort(item: ItemAspect, preferences: PlannerPreferences = {}) {
   if (preferences.preferred?.size && preferences.preferred.has(key(item))) return 0.15
@@ -35,7 +36,11 @@ export function itemEffort(item: ItemAspect, preferences: PlannerPreferences = {
 export const itemSimplicity = (item: ItemAspect, preferences: PlannerPreferences = {}) => itemEffort(item, preferences)
 
 export function key(item: ItemAspect) {
-  return `${item.registryId ?? item.name}|${Object.entries(item.aspects).sort(([a], [b]) => a.localeCompare(b)).map(([aspect, amount]) => `${aspect}:${amount}`).join(',')}`
+  const cached = keyCache.get(item)
+  if (cached !== undefined) return cached
+  const value = `${item.registryId ?? item.name}|${Object.entries(item.aspects).sort(([a], [b]) => a.localeCompare(b)).map(([aspect, amount]) => `${aspect}:${amount}`).join(',')}`
+  keyCache.set(item, value)
+  return value
 }
 
 export function prepareItems(items: ItemAspect[]) {
@@ -77,18 +82,29 @@ function simplePool(candidates: ItemAspect[], required: Requirement, preferences
   return [...new Set([...shortlist, ...(preferences.preferred?.size ? candidates.filter((item) => preferences.preferred?.has(key(item))) : [])])]
 }
 
-function simplePlanCounts(candidates: ItemAspect[], required: Requirement, preferences: PlannerPreferences): Map<ItemAspect, number> | null {
+function simplePlanCounts(candidates: ItemAspect[], required: Requirement, preferences: PlannerPreferences, initialCounts?: Map<ItemAspect, number>): Map<ItemAspect, number> | null {
   const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0)
   const pool = simplePool(candidates, required, preferences)
   if (aspects.some((aspect) => !pool.some((item) => (item.aspects[aspect] ?? 0) > 0))) return null
   const byAspect = new Map(aspects.map((aspect) => [aspect, pool.filter((item) => (item.aspects[aspect] ?? 0) > 0)]))
+  const minimumEffortPerAspect = new Map(aspects.map((aspect) => [aspect,
+    Math.min(...byAspect.get(aspect)!.map((item) => itemEffort(item, preferences) / item.aspects[aspect]))]))
   const lowerBound = (remaining: Requirement) => Math.max(0, ...aspects.map((aspect) => {
     const amount = remaining[aspect]
-    return amount <= 0 ? 0 : amount * Math.min(...byAspect.get(aspect)!.map((item) => itemEffort(item, preferences) / item.aspects[aspect]))
+    return amount <= 0 ? 0 : amount * minimumEffortPerAspect.get(aspect)!
   }))
   const priority = (state: SearchState) => state.cost + lowerBound(state.remaining)
   let beam: SearchState[] = [{ remaining: { ...required }, counts: new Map(), cost: 0 }]
   let best: SearchState | null = null
+  if (initialCounts?.size) {
+    const remaining = { ...required }
+    let cost = 0
+    for (const [item, count] of initialCounts) {
+      cost += additionCost(item, count, remaining, true, preferences)
+      for (const aspect of aspects) remaining[aspect] = Math.max(0, remaining[aspect] - (item.aspects[aspect] ?? 0) * count)
+    }
+    if (aspects.every((aspect) => remaining[aspect] === 0)) best = { remaining, counts: initialCounts, cost }
+  }
   const width = aspects.length <= 4 ? 80 : 32
   const depthLimit = Math.min(20, aspects.length * 4 + 4)
 
@@ -129,7 +145,7 @@ function simplePlanCounts(candidates: ItemAspect[], required: Requirement, prefe
   return best?.counts ?? null
 }
 
-function makePlan(items: ItemAspect[], required: Requirement, title: string, strategy: 'simple' | 'fewest' | 'clean', preferences: PlannerPreferences): Plan | null {
+function makePlan(items: ItemAspect[], required: Requirement, title: string, strategy: 'simple' | 'fewest' | 'clean', preferences: PlannerPreferences, initialCounts?: Map<ItemAspect, number>): Plan | null {
   const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0)
   const candidates = items.filter((item) =>
     !(preferences.excluded?.size && preferences.excluded.has(key(item))) && itemEffort(item, preferences) < 1000 &&
@@ -138,7 +154,7 @@ function makePlan(items: ItemAspect[], required: Requirement, title: string, str
 
   const pool = candidates
   const remaining = { ...required }
-  let counts = strategy === 'simple' ? simplePlanCounts(candidates, required, preferences) : null
+  let counts = strategy === 'simple' ? simplePlanCounts(candidates, required, preferences, initialCounts) : null
   if (strategy === 'simple' && !counts) return null
   counts ??= new Map<ItemAspect, number>()
   const totalNeeded = Object.values(required).reduce((sum, value) => sum + value, 0)
@@ -198,10 +214,11 @@ function makePlan(items: ItemAspect[], required: Requirement, title: string, str
   }
 }
 
-export function buildPlans(items: ItemAspect[], required: Requirement, preferences: PlannerPreferences = {}): Plan[] {
+export function buildPlans(items: ItemAspect[], required: Requirement, preferences: PlannerPreferences = {}, favoritePlan?: Plan): Plan[] {
   if (!Object.values(required).some((amount) => amount > 0)) return []
   const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0)
-  const simple = makePlan(items, required, 'Practical items', 'simple', preferences)
+  const seed = favoritePlan && new Map(favoritePlan.lines.map(({ item, count }) => [item, count]))
+  const simple = makePlan(items, required, 'Practical items', 'simple', preferences, seed)
   const clean = makePlan(items, required, 'Less excess essentia', 'clean', preferences)
   const totalNeeded = Object.values(required).reduce((sum, amount) => sum + Math.max(0, amount), 0)
   const fewest = makePlan(items, required, 'Fewest items', 'fewest', preferences)
@@ -212,6 +229,7 @@ export function buildPlans(items: ItemAspect[], required: Requirement, preferenc
     simple,
     fewest && fewest.extra <= Math.max(24, totalNeeded * 1.5) ? fewest : null,
     clean && (!simple || clean.extra < simple.extra && planCost(clean) <= simpleCost * 2) ? clean : null,
+    favoritePlan ? { ...favoritePlan, title: 'From favorites' } : null,
   ]
   if (simple) {
     const replacementPlans: Plan[] = []
@@ -221,27 +239,43 @@ export function buildPlans(items: ItemAspect[], required: Requirement, preferenc
       const otherPlan = planFromLines(otherLines, required)
       const deficit = aspects.filter((aspect) => (otherPlan.remaining[aspect] ?? 0) > 0)
       if (deficit.length === 0) continue
-      const replacements = items.filter((item) =>
-        !(preferences.excluded?.size && preferences.excluded.has(key(item))) &&
-        itemEffort(item, preferences) < 1000 &&
-        item.name !== line.item.name &&
-        deficit.every((aspect) => (item.aspects[aspect] ?? 0) > 0) &&
-        aspects.every((aspect) => (item.aspects[aspect] ?? 0) <= 0 || (line.item.aspects[aspect] ?? 0) > 0),
-      ).map((item) => {
+      const otherCost = otherLines.reduce((sum, entry) => sum + itemEffort(entry.item, preferences) * entry.count, 0)
+      const bestReplacements: { item: ItemAspect; count: number; cost: number; id: string }[] = []
+      for (const item of items) {
+        if (preferences.excluded?.size && preferences.excluded.has(key(item))) continue
+        const effort = itemEffort(item, preferences)
+        if (effort >= 1000 || item.name === line.item.name ||
+          !deficit.every((aspect) => (item.aspects[aspect] ?? 0) > 0) ||
+          !aspects.every((aspect) => (item.aspects[aspect] ?? 0) <= 0 || (line.item.aspects[aspect] ?? 0) > 0)) continue
         const count = Math.max(...deficit.map((aspect) => Math.ceil(otherPlan.remaining[aspect] / item.aspects[aspect])))
+        let extra = 0
+        const produced = { ...otherPlan.produced }
+        for (const [aspect, amount] of Object.entries(item.aspects)) produced[aspect] = (produced[aspect] ?? 0) + amount * count
+        for (const [aspect, amount] of Object.entries(produced)) extra += Math.max(0, amount - (required[aspect] ?? 0))
+        if (extra > maximumExtra) continue
+        const existing = otherLines.find((entry) => key(entry.item) === key(item))
+        const id = [...otherLines.filter((entry) => entry !== existing).map(({ item: source, count: amount }) => `${key(source)}×${amount}`),
+          `${key(item)}×${count + (existing?.count ?? 0)}`].sort().join(';')
+        const cost = otherCost + effort * count + extra * 0.2 + (otherLines.length + (existing ? 0 : 1)) * 4
+        const candidate = { item, count, cost, id }
+        const position = bestReplacements.findIndex((entry) => cost < entry.cost || cost === entry.cost && id.localeCompare(entry.id) < 0)
+        if (position === -1) {
+          if (bestReplacements.length < 3) bestReplacements.push(candidate)
+        } else bestReplacements.splice(position, 0, candidate)
+        if (bestReplacements.length > 3) bestReplacements.pop()
+      }
+      for (const replacement of bestReplacements) {
         const combined = new Map<string, PlanLine>()
-        for (const entry of [...otherLines, { item, count }]) {
+        for (const entry of [...otherLines, { item: replacement.item, count: replacement.count }]) {
           const id = key(entry.item)
           const previous = combined.get(id)
           combined.set(id, { item: entry.item, count: (previous?.count ?? 0) + entry.count })
         }
         const lines = [...combined.values()].sort((a, b) => b.count - a.count || a.item.name.localeCompare(b.item.name))
         const plan = planFromLines(lines, required, `Instead of ${line.item.name}`)
-        plan.id = lines.map(({ item: source, count: amount }) => `${key(source)}×${amount}`).sort().join(';')
-        return plan
-      }).filter((plan) => aspects.every((aspect) => plan.remaining[aspect] === 0) && plan.extra <= maximumExtra)
-        .sort((a, b) => planCost(a) - planCost(b) || a.id.localeCompare(b.id))
-      replacementPlans.push(...replacements.slice(0, 3))
+        plan.id = replacement.id
+        replacementPlans.push(plan)
+      }
     }
     variants.push(...replacementPlans.slice(0, 4))
   }
