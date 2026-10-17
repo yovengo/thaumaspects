@@ -7,7 +7,8 @@ export const aspectNames = translate as Record<string, string>
 export const versionMap = versionDictionary as unknown as Record<string, VersionDefinition>
 export const addonMap = addonDictionary as unknown as Record<string, AddonDefinition>
 export const versions = Object.keys(versionMap)
-export const latestVersion = '5.1.3'
+// GTNH uses Thaumcraft 4. This is the newest TC4 research graph in our source data.
+export const gtnhResearchVersion = '4.2.2.0'
 export const versionStorageKey = 'thaumaspects.version'
 export const addonEntries = Object.entries(addonMap)
 
@@ -16,9 +17,9 @@ export const aspectLabel = (aspect: string) => `${aspectNames[aspect] ?? aspect}
 export const aspectIconUrl = (aspect: string, muted = false) => `/aspects/${muted ? 'mono' : 'color'}/${aspectNames[aspect]}.png`
 
 export function getStoredVersion() {
-  if (typeof window === 'undefined') return latestVersion
+  if (typeof window === 'undefined') return gtnhResearchVersion
   const storedVersion = window.localStorage.getItem(versionStorageKey)
-  return storedVersion && storedVersion in versionMap ? storedVersion : latestVersion
+  return storedVersion && storedVersion in versionMap ? storedVersion : gtnhResearchVersion
 }
 
 export function getCatalog(version: string): Catalog {
@@ -39,6 +40,4 @@ export function getCatalog(version: string): Catalog {
   }
 }
 
-export const defaultEnabled = (catalog: Catalog) => new Set(
-  catalog.aspects.filter((aspect) => !catalog.addonAspects.includes(aspect) || addonMap.gt.aspects.includes(aspect)),
-)
+export const defaultEnabled = (catalog: Catalog) => new Set(catalog.aspects)

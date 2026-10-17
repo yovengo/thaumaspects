@@ -4,84 +4,18 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { addonDictionary } from './data/addons.js'
-import { translate } from './data/aspects.js'
-import { versionDictionary } from './data/versions.js'
+import { addonEntries, addonMap, aspectIconUrl as icon, aspectLabel as label, defaultEnabled, getCatalog, gtnhResearchVersion } from './lib/catalog'
 import EssentiaPlanner from './components/EssentiaPlanner'
 import { solveAllAnchors, type BoardSearchProgress, type SolvedBoard } from './features/research-map/boardSolver'
 import type { SolveRequest, SolveResponse } from './features/research-map/boardSolver.worker'
+import { findAspectPath } from './lib/aspectGraph'
 
-type Combinations = Record<string, [string, string]>
-type VersionDefinition = { base_aspects: string[]; combinations: Combinations }
-type AddonDefinition = { name: string; aspects: string[]; combinations: Combinations }
 type Mode = 'quick' | 'board'
 
-const aspectNames = translate as Record<string, string>
-const versionMap = versionDictionary as unknown as Record<string, VersionDefinition>
-const addonMap = addonDictionary as unknown as Record<string, AddonDefinition>
-
-const latestVersion = '5.1.3'
-const addonEntries = Object.entries(addonMap)
-
-const label = (aspect: string) => `${aspectNames[aspect] ?? aspect}`.replace(/^./, (letter) => letter.toUpperCase())
-const icon = (aspect: string, muted = false) => `/aspects/${muted ? 'mono' : 'color'}/${aspectNames[aspect]}.png`
-
-const defaultEnabled = (catalog: ReturnType<typeof getCatalog>) => new Set(catalog.aspects.filter((aspect) => !catalog.addonAspects.includes(aspect) || addonMap.gt.aspects.includes(aspect)))
-
-function getCatalog(version: string) {
-  const definition = versionMap[version]
-  const combinations: Combinations = { ...definition.combinations }
-  const addonAspects: string[] = []
-
-  addonEntries.forEach(([, addon]) => {
-    Object.assign(combinations, addon.combinations)
-    addonAspects.push(...addon.aspects)
-  })
-
-  return {
-    combinations,
-    addonAspects,
-    aspects: [...new Set([...definition.base_aspects, ...Object.keys(definition.combinations), ...addonAspects])].sort((a, b) => label(a).localeCompare(label(b))),
-  }
-}
-
-function findPath(from: string, to: string, minSpaces: number, combinations: Combinations, enabled: Set<string>) {
-  const graph: Record<string, string[]> = {}
-  const connect = (a: string, b: string) => {
-    ;(graph[a] ??= []).push(b)
-    ;(graph[b] ??= []).push(a)
-  }
-  Object.entries(combinations).forEach(([compound, parts]) => {
-    connect(compound, parts[0])
-    connect(compound, parts[1])
-  })
-
-  const queue: { path: string[]; cost: number }[] = [{ path: [from], cost: 0 }]
-  const visited = new Map<string, Set<number>>()
-
-  while (queue.length) {
-    queue.sort((a, b) => a.cost - b.cost)
-    const current = queue.shift()!
-    const node = current.path[current.path.length - 1]
-    const edges = current.path.length - 1
-    const depths = visited.get(node) ?? new Set<number>()
-    if (depths.has(edges)) continue
-    depths.add(edges)
-    visited.set(node, depths)
-
-    if (node === to && current.path.length > minSpaces + 1) return current.path
-    for (const next of graph[node] ?? []) {
-      queue.push({
-        path: [...current.path, next],
-        cost: current.cost + (enabled.has(next) ? 1 : 100) + (current.path.includes(next) ? 8 : 0),
-      })
-    }
-  }
-  return null
-}
+const researchCatalog = getCatalog(gtnhResearchVersion)
 
 function AspectIcon({ aspect, muted = false }: { aspect: string; muted?: boolean }) {
-  return <Image className="aspect-icon" src={icon(aspect, muted)} width={26} height={26} alt="" />
+  return <Image className={`aspect-icon${aspect === 'constellation' ? ' is-astrum' : ''}`} src={icon(aspect, muted)} width={26} height={26} alt="" />
 }
 
 function WandIcon() {
@@ -140,9 +74,9 @@ function getBoardCells(boardSize: number) {
 }
 
 function App({ page }: { page: 'board' | 'essentia' }) {
-  const catalog = useMemo(() => getCatalog(latestVersion), [])
-  const [enabled, setEnabled] = useState<Set<string>>(() => defaultEnabled(getCatalog(latestVersion)))
-  const [activeAddons, setActiveAddons] = useState<Set<string>>(() => new Set(['gt']))
+  const catalog = researchCatalog
+  const [enabled, setEnabled] = useState<Set<string>>(() => defaultEnabled(researchCatalog))
+  const [activeAddons, setActiveAddons] = useState<Set<string>>(() => new Set(addonEntries.map(([id]) => id)))
   const [from, setFrom] = useState('air')
   const [to, setTo] = useState('air')
   const [minSpaces, setMinSpaces] = useState(1)
@@ -195,7 +129,7 @@ function App({ page }: { page: 'board' | 'essentia' }) {
   }
 
   const runSearch = () => {
-    setResult(findPath(from, to, minSpaces, catalog.combinations, enabled))
+    setResult(findAspectPath(from, to, minSpaces, catalog.combinations, enabled))
     setSearched(true)
   }
 

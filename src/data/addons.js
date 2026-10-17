@@ -29,5 +29,31 @@ export const addonDictionary = {
       "radioactivity": ["light", "energy"],
       "stupidity": ["entropy", "mind"]
     }
+  },
+  "av": {
+    "name": "Avaritia",
+    "aspects": ["apocalypse"],
+    "combinations": {
+      "apocalypse": ["greed", "eldritch"]
+    }
+  },
+  "tb": {
+    "name": "Thaumic Boots",
+    "aspects": ["space", "boots"],
+    "combinations": {
+      "space": ["crystal", "metal"],
+      "boots": ["armor", "travel"]
+    }
+  },
+  "gtnh": {
+    "name": "GTNH aspects",
+    "aspects": ["equality", "madness", "beginning", "constellation", "glory"],
+    "combinations": {
+      "equality": ["mind", "order"],
+      "madness": ["mind", "taint"],
+      "beginning": ["void", "motion"],
+      "constellation": ["light", "beginning"],
+      "glory": ["man", "travel"]
+    }
   }
 };

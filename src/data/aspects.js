@@ -64,5 +64,13 @@ export const translate = {
 	"magnetism": "magneto",
 	"cheatiness": "nebrisum",
 	"radioactivity": "radio",
-	"stupidity": "stronito"
+	"stupidity": "strontio",
+	"apocalypse": "terminus",
+	"space": "caelum",
+	"boots": "tabernus",
+	"equality": "aequalitas",
+	"madness": "vesania",
+	"beginning": "primordium",
+	"constellation": "astrum",
+	"glory": "gloria"
 };

@@ -11,7 +11,7 @@ The helper finds aspect connections for GTNH research. In addition to quick chai
 ## Features
 
 - GTNH-focused research map using Thaumcraft aspect relationships.
-- Forbidden Magic, Magic Bees, and GregTech add-ons.
+- All 69 GTNH research aspects, including Forbidden Magic, Magic Bees, GregTech, Avaritia, Thaumic Boots, and GTNH additions.
 - Chain search that accounts for unavailable aspects.
 - An interactive, resizable hex map with drag-and-drop and obstacles.
 - Automatic route building and visualization on the map.
@@ -53,4 +53,4 @@ pnpm build
 
 ## Attribution and license
 
-The original [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) project is licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/). This project preserves the required attribution; the transferred aspect data, artwork, and core search logic originate from that repository.
+The original [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) project is licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/). This project preserves the required attribution; the transferred aspect data, artwork, and core search logic originate from that repository. Additional GTNH aspect definitions and icons come from the [jimmon89/tcresearch GTNH fork](https://github.com/jimmon89/tcresearch), also under Creative Commons Attribution 4.0.

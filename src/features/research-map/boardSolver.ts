@@ -1,4 +1,4 @@
-import { findAspectPath } from '../../lib/aspectGraph'
+import { createAspectPathFinder } from '../../lib/aspectGraph'
 import type { Catalog } from '../../types/domain'
 import { boardDistance, getBoardNeighbors, routeTurns } from './boardGeometry'
 
@@ -80,6 +80,7 @@ export function solveAllAnchors(
   const connected = new Set<string>([anchors[0]])
   const remaining = new Set(anchors.slice(1))
   const routes: string[][] = []
+  const findAspectPath = createAspectPathFinder(catalog.combinations, enabled)
 
   while (remaining.size) {
     let best: { target: string; route: string[]; aspects: string[]; score: number } | null = null
@@ -95,8 +96,6 @@ export function solveAllAnchors(
             workingBoard[source],
             workingBoard[target],
             Math.max(0, shortestRoute.length - 2 + extraSpaces),
-            catalog.combinations,
-            enabled,
           )
           if (!aspectPath) continue
           const routeCandidates = findBoardRouteCandidates(source, target, aspectPath.length, occupied, boardSize, 12, onSearch)
