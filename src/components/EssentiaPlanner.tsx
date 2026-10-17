@@ -179,6 +179,9 @@ export default function EssentiaPlanner() {
   const plannerWorker = useRef<Worker | null>(null)
   const activePlanJob = useRef<string | null>(null)
   const pendingPlanJob = useRef<PlanJob | null>(null)
+  const latestPlanRequest = useRef('')
+  const latestCatalogRequest = useRef('')
+  const latestSourceRequest = useRef('')
   const [rows, setRows] = useState<Row[]>([{ id: 1, aspect: 'ignis', amount: '16' }, { id: 2, aspect: 'potentia', amount: '16' }])
   const [nextId, setNextId] = useState(3)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -244,6 +247,7 @@ export default function EssentiaPlanner() {
     }).filter((source) => !normalized || `${source.name} ${source.item?.registryId ?? ''}`.toLocaleLowerCase().includes(normalized))
   }, [sourcesOpen, sourcesQuery, availability, availabilityItems])
   const planRequest = JSON.stringify([required, availability.stage, availability.preferred, availability.excluded])
+  useEffect(() => { latestPlanRequest.current = planRequest }, [planRequest])
   useEffect(() => {
     if (!catalog) return
     const worker = new Worker(new URL('../workers/essentiaPlanner.worker.ts', import.meta.url), { type: 'module' })
@@ -254,7 +258,13 @@ export default function EssentiaPlanner() {
     >) => {
       const result = event.data
       if (result.type === 'calculate') {
-        setPlanResult(result)
+        if (result.request === latestPlanRequest.current) {
+          if (result.partial) {
+            setPlanResult((previous) => previous?.plans.length ? previous : result)
+            return
+          }
+          setPlanResult(result)
+        }
         if (result.partial) return
         activePlanJob.current = null
         const next = pendingPlanJob.current
@@ -264,8 +274,8 @@ export default function EssentiaPlanner() {
           worker.postMessage(next)
         } else pendingPlanJob.current = null
       }
-      else if (result.type === 'catalog') setCatalogResult(result)
-      else setSourceResult(result)
+      else if (result.type === 'catalog' && result.request === latestCatalogRequest.current) setCatalogResult(result)
+      else if (result.type === 'sources' && result.request === latestSourceRequest.current) setSourceResult(result)
     }
     worker.onerror = () => setWorkerFailed(true)
     worker.postMessage({ type: 'init', items: catalog.items })
@@ -296,9 +306,11 @@ export default function EssentiaPlanner() {
   }, [catalog, planRequest, required, requestedTotal, availability])
   const calculating = Boolean(catalog && requestedTotal > 0 && !workerFailed && planResult?.request !== planRequest)
   const refining = planResult?.request === planRequest && planResult.partial
-  const plans = requestedTotal <= 0 || calculating || workerFailed ? [] : planResult?.plans ?? []
+  const plans = requestedTotal <= 0 || workerFailed ? [] : planResult?.plans ?? []
   const catalogRequest = JSON.stringify([query, catalogFilter, catalogSort, required, availability])
   const sourceRequest = JSON.stringify([sourceQuery, requestedAspects, availability])
+  useEffect(() => { latestCatalogRequest.current = catalogRequest }, [catalogRequest])
+  useEffect(() => { latestSourceRequest.current = sourceRequest }, [sourceRequest])
   useEffect(() => {
     if (!catalog || !catalogOpen) return
     const timer = window.setTimeout(() => plannerWorker.current?.postMessage({
@@ -317,6 +329,9 @@ export default function EssentiaPlanner() {
   }, [catalog, sourcePickerOpen, sourceRequest, sourceQuery, requestedAspects, availability])
   const customPlan = useMemo(() => planFromLines(customLines, required), [customLines, required])
   const selected = selectedId === 'custom' && customLines.length ? customPlan : plans.find((plan) => plan.id === selectedId) ?? plans[0]
+  const resultRequired: Requirement = calculating && selectedId !== 'custom' && planResult?.plans.length
+    ? JSON.parse(planResult.request)[0] : required
+  const resultAspects = Object.keys(resultRequired)
   const shortage = selected ? Object.entries(selected.remaining).filter(([, amount]) => amount > 0) : []
   const availableAspects = catalog?.aspects.filter((aspect) => !/^custom\d+$/i.test(aspect)) ?? ['ignis', 'potentia']
   const usedAspects = new Set(rows.map((row) => row.aspect))
@@ -338,10 +353,10 @@ export default function EssentiaPlanner() {
 
   const catalogSearching = catalogOpen && !workerFailed && catalogResult?.request !== catalogRequest
   const sourceSearching = sourcePickerOpen && !workerFailed && sourceResult?.request !== sourceRequest
-  const filteredItems = useMemo(() => catalog && !catalogSearching
-    ? catalogResult?.indices.map((index) => catalog.items[index]) ?? [] : [], [catalog, catalogSearching, catalogResult])
-  const sourceMatches = useMemo(() => catalog && !sourceSearching
-    ? sourceResult?.indices.map((index) => catalog.items[index]) ?? [] : [], [catalog, sourceSearching, sourceResult])
+  const filteredItems = useMemo(() => catalog
+    ? catalogResult?.indices.map((index) => catalog.items[index]) ?? [] : [], [catalog, catalogResult])
+  const sourceMatches = useMemo(() => catalog
+    ? sourceResult?.indices.map((index) => catalog.items[index]) ?? [] : [], [catalog, sourceResult])
   const unprofiledMatches = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
     if (!catalog?.unprofiledItems || normalized.length < 2) return []
@@ -448,27 +463,28 @@ export default function EssentiaPlanner() {
         </div>
       </div>
 
-      <div className="panel ess-result" aria-live="polite" ref={resultRef}><div className="ess-section-head"><h3>Furnace</h3>{refining && selectedId !== 'custom' && <small className="ess-refining" role="status">Refining…</small>}{selectedId === 'custom' && <button className="ess-reset-plan" type="button" onClick={() => setSelectedId(null)}>Restore recommendation</button>}</div>
+      <div className={`panel ess-result${calculating && selectedId !== 'custom' ? ' is-updating' : ''}`} ref={resultRef}><div className="ess-section-head"><h3>Furnace</h3>{selectedId === 'custom' && <button className="ess-reset-plan" type="button" onClick={() => setSelectedId(null)}>Restore recommendation</button>}</div>
+        {selectedId !== 'custom' && (refining || (calculating && selected)) && <span className="ess-update-indicator" role="status">{refining ? 'Refining…' : 'Updating…'}</span>}
         {!catalog && !loadError && <div className="ess-state">Loading item catalog…</div>}
         {loadError && <div className="ess-state">Could not load the catalog. Please refresh the page.</div>}
         {workerFailed && <div className="ess-state">Calculation unavailable. Please refresh the page.</div>}
         {catalog && requestedAspects.length === 0 && <div className="ess-state">Enter an amount for at least one aspect.</div>}
-        {catalog && requestedAspects.length > 0 && calculating && selectedId !== 'custom' && <div className="ess-state">Calculating a practical mix…</div>}
+        {catalog && requestedAspects.length > 0 && calculating && !selected && selectedId !== 'custom' && <div className="ess-state">Calculating a practical mix…</div>}
         {catalog && requestedAspects.length > 0 && !calculating && !workerFailed && !planResult?.error && !selected && <div className="ess-state">No suitable item mix found. Try different aspects.</div>}
         {catalog && planResult?.request === planRequest && planResult.error && <div className="ess-state">Could not calculate a mix. Try changing the target.</div>}
-        {selected && <div className="ess-result-body"><div className="ess-result-items"><div className="ess-picked-head"><span className="ess-pick-label">{selectedId === 'custom' ? 'Your selection' : selected.title}</span><strong>{selected.itemCount.toLocaleString('en-US')} <small>{itemWord(selected.itemCount)}</small></strong></div>
+        {selected && <div className="ess-result-body" aria-busy={calculating && selectedId !== 'custom'}><div className="ess-result-items"><div className="ess-picked-head"><span className="ess-pick-label">{selectedId === 'custom' ? 'Your selection' : selected.title}</span><strong>{selected.itemCount.toLocaleString('en-US')} <small>{itemWord(selected.itemCount)}</small></strong></div>
           <div className="ess-picked-items">{selected.lines.map(({ item, count }) => {
             const id = itemKey(item)
-            const aspectEntries = Object.entries(item.aspects).sort(([a], [b]) => Number(Boolean(required[b])) - Number(Boolean(required[a])) || a.localeCompare(b))
+            const aspectEntries = Object.entries(item.aspects).sort(([a], [b]) => Number(Boolean(resultRequired[b])) - Number(Boolean(resultRequired[a])) || a.localeCompare(b))
             const expanded = expandedItems.has(id)
             return <div className="ess-picked-item" key={id}><ItemIcon item={item} large /><div className="ess-picked-item-details"><strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>{item.aspectVersion && <small className="ess-aspect-source" title="Aspect profile comes from an earlier GTNH release and is unverified in 2.9">GTNH {item.aspectVersion}</small>}<div className="ess-picked-aspects">{(expanded ? aspectEntries : aspectEntries.slice(0, 6)).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}{aspectEntries.length > 6 && <button className="ess-more-aspects" type="button" aria-expanded={expanded} onClick={() => toggleExpanded(id)}>{expanded ? 'Collapse' : `+${aspectEntries.length - 6} ${aspectWord(aspectEntries.length - 6)}`}</button>}</div></div>{selectedId === 'custom' ? <div className="ess-count-stepper"><button type="button" aria-label={`Decrease ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count - 1)}>−</button><b>{count}</b><button type="button" aria-label={`Increase ${displayItemName(item.name)}`} onClick={() => updateCustomCount(item, count + 1)}>+</button></div> : <div className="ess-item-tools"><b className="ess-item-count">× {count}</b><button type="button" onClick={() => excludeItem(item)}>Not available</button></div>}</div>
           })}</div>
           {selected.lines.some(({ item }) => item.aspectVersion) && <p className="ess-source-note">GTNH 2.8 aspect values · unverified in 2.9</p>}
           </div><div className="ess-result-analysis">
-          <div className="ess-progress-list">{requestedAspects.map((aspect) => { const amount = selected.produced[aspect] ?? 0; const target = required[aspect]; return <div className="ess-progress" key={aspect}><AspectIcon name={aspect} /><span>{aspectLabel(aspect)}</span><b className={amount < target ? 'is-short' : ''}>{amount} / {target}</b><div className="ess-progress-track"><span style={{ width: `${Math.min(100, amount / target * 100)}%` }} /></div></div> })}</div>
+          <div className="ess-progress-list">{resultAspects.map((aspect) => { const amount = selected.produced[aspect] ?? 0; const target = resultRequired[aspect]; return <div className="ess-progress" key={aspect}><AspectIcon name={aspect} /><span>{aspectLabel(aspect)}</span><b className={amount < target ? 'is-short' : ''}>{amount} / {target}</b><div className="ess-progress-track"><span style={{ width: `${Math.min(100, amount / target * 100)}%` }} /></div></div> })}</div>
           {shortage.length > 0 && <div className="ess-shortage"><strong>Missing</strong><span>{shortage.map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')}</span></div>}
           {selected.extra > 0 && <div className="ess-result-meta"><span>+{selected.extra} excess</span></div>}
-          {Object.entries(selected.produced).filter(([aspect]) => !required[aspect]).length > 0 && <div className="ess-other-aspects"><span>Byproducts</span>{Object.entries(selected.produced).filter(([aspect]) => !required[aspect]).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}</div>}
+          {Object.entries(selected.produced).filter(([aspect]) => !resultRequired[aspect]).length > 0 && <div className="ess-other-aspects"><span>Byproducts</span>{Object.entries(selected.produced).filter(([aspect]) => !resultRequired[aspect]).map(([aspect, amount]) => <AspectTag key={aspect} name={aspect} amount={amount} />)}</div>}
         </div></div>}
         {catalog && requestedAspects.length > 0 && <div className="ess-source-browser">
           <button className="ess-source-toggle" type="button" aria-expanded={sourcePickerOpen} onClick={() => sourcePickerOpen ? setSourcePickerOpen(false) : openSourcePicker()}>
@@ -478,7 +494,7 @@ export default function EssentiaPlanner() {
             <label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input ref={sourceSearchRef} type="search" value={sourceQuery} onChange={(event) => { setSourceQuery(event.target.value); setSourceVisibleCount(12) }} placeholder="Item name or ID" aria-label="Search essentia sources" />{sourceQuery && <button type="button" aria-label="Clear source search" onClick={() => { setSourceQuery(''); setSourceVisibleCount(12); sourceSearchRef.current?.focus() }}>×</button>}</label>
             {sourceQuery && <p>{sourceSearching ? 'Searching…' : `${sourceMatches.length.toLocaleString('en-US')} found`}</p>}
             <div className="ess-source-list">{sourceMatches.slice(0, sourceVisibleCount).map((item) => <div className="ess-source-row" key={itemKey(item)}><ItemIcon item={item} /><div><strong>{displayItemName(item.name)}</strong><small>{Object.entries(item.aspects).filter(([aspect]) => required[aspect]).map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`).join(' · ')}{item.aspectVersion ? ` · GTNH ${item.aspectVersion}` : ''}</small></div><button type="button" disabled={preferences.excluded.has(itemKey(item))} onClick={() => chooseItem(item)}>{countForItem(item, required)} {itemWord(countForItem(item, required) ?? 0)} →</button></div>)}</div>
-            {sourceSearching && <p>Searching sources…</p>}
+            {sourceSearching && sourceMatches.length === 0 && <p>Searching sources…</p>}
             {!sourceSearching && sourceMatches.length === 0 && <p>No matches. Try another name or ID.</p>}
             <div className="ess-source-footer">{sourceVisibleCount < sourceMatches.length && <button type="button" onClick={() => setSourceVisibleCount((count) => count + 12)}>Show 12 more</button>}<button type="button" onClick={openCatalogSearch}>Open full catalog ↓</button></div>
           </div>}
@@ -486,7 +502,7 @@ export default function EssentiaPlanner() {
       </div>
     </section>
 
-    {plans.length > 1 && <section className="panel ess-alternatives" aria-label="Alternative item mixes"><div className="ess-section-head"><h3>Alternatives</h3></div><div className="ess-alternative-grid">{visiblePlans.map((plan) => <button type="button" className={`ess-alternative ${selected?.id === plan.id ? 'is-active' : ''}`} key={plan.id} onClick={() => selectPlan(plan.id)}><span className="ess-alternative-icons">{plan.lines.slice(0, 2).map(({ item }) => <ItemIcon key={itemKey(item)} item={item} />)}</span><span className="ess-alternative-copy"><strong>{plan.title}</strong><small>{plan.lines.map(({ item, count }) => `${count}× ${displayItemName(item.name)}${item.aspectVersion ? ` [${item.aspectVersion}]` : ''}`).join(' + ')}</small></span>{plan.extra > 0 && <em>+{plan.extra} excess</em>}</button>)}</div>{plans.length > 3 && <button className="ess-more-alternatives" type="button" aria-expanded={alternativesOpen} onClick={() => setAlternativesOpen((open) => !open)}>{alternativesOpen ? 'Show fewer mixes ↑' : `Show all ${plans.length} mixes ↓`}</button>}</section>}
+    {plans.length > 1 && <section className={`panel ess-alternatives${calculating ? ' is-updating' : ''}`} aria-label="Alternative item mixes"><div className="ess-section-head"><h3>Alternatives</h3></div><div className="ess-alternative-grid">{visiblePlans.map((plan) => <button type="button" className={`ess-alternative ${selected?.id === plan.id ? 'is-active' : ''}`} key={plan.id} onClick={() => selectPlan(plan.id)}><span className="ess-alternative-icons">{plan.lines.slice(0, 2).map(({ item }) => <ItemIcon key={itemKey(item)} item={item} />)}</span><span className="ess-alternative-copy"><strong>{plan.title}</strong><small>{plan.lines.map(({ item, count }) => `${count}× ${displayItemName(item.name)}${item.aspectVersion ? ` [${item.aspectVersion}]` : ''}`).join(' + ')}</small></span>{plan.extra > 0 && <em>+{plan.extra} excess</em>}</button>)}</div>{plans.length > 3 && <button className="ess-more-alternatives" type="button" aria-expanded={alternativesOpen} onClick={() => setAlternativesOpen((open) => !open)}>{alternativesOpen ? 'Show fewer mixes ↑' : `Show all ${plans.length} mixes ↓`}</button>}</section>}
 
     <section className={`panel ess-catalog ${catalogOpen ? 'is-open' : ''}`} aria-label="Full item catalog" ref={catalogRef}><div className="ess-catalog-header"><div className="ess-section-head"><h3>Catalog</h3></div><button className="ess-catalog-toggle" type="button" aria-expanded={catalogOpen} onClick={() => setCatalogOpen((current) => !current)}>{catalogOpen ? 'Hide catalog −' : 'Browse catalog +'}</button></div>
       {(availability.preferred.length > 0 || availability.excluded.length > 0) && <div className="ess-availability-panel">
@@ -504,7 +520,7 @@ export default function EssentiaPlanner() {
       </div>}
       <div className="ess-catalog-toolbar"><div className="ess-catalog-search-field"><label className="ess-catalog-search"><span aria-hidden="true">⌕</span><input ref={catalogSearchRef} type="search" placeholder="Item name or ID" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(30) }} aria-label="Search items" />{query && <button type="button" aria-label="Clear search" onClick={() => { setQuery(''); setVisibleCount(30) }}>×</button>}</label></div><div className="ess-sort"><SelectField label="Sort by" value={catalogSort} options={[["practical", "Easiest to get"], ["quantity", "Fewest items"], ["name", "Name"]]} onChange={(sort) => { setCatalogSort(sort as CatalogSort); setVisibleCount(30) }} /></div></div>
       <div className="ess-filter-tabs" role="group" aria-label="Item filter"><button type="button" className={catalogFilter === 'allSelected' ? 'is-active' : ''} onClick={() => { setCatalogFilter('allSelected'); setVisibleCount(30) }}>All aspects</button><button type="button" className={catalogFilter === 'anySelected' ? 'is-active' : ''} onClick={() => { setCatalogFilter('anySelected'); setVisibleCount(30) }}>Any aspect</button><button type="button" className={catalogFilter === 'allItems' ? 'is-active' : ''} onClick={() => { setCatalogFilter('allItems'); setVisibleCount(30) }}>All items</button></div>
-      <div className="ess-catalog-summary"><strong>{catalogSearching ? '…' : filteredItems.length.toLocaleString('en-US')}</strong><span>{catalogSearching ? 'Searching' : 'items'}</span></div>
+      <div className="ess-catalog-summary" aria-busy={catalogSearching}><strong>{filteredItems.length.toLocaleString('en-US')}</strong><span>items</span>{catalogSearching && <span className="ess-catalog-updating" role="status">Updating…</span>}</div>
       <div className="ess-catalog-list">{matchesShown.map((item) => {
         const overlap = requestedAspects.some((aspect) => (item.aspects[aspect] ?? 0) > 0)
         const coversAll = requestedAspects.every((aspect) => (item.aspects[aspect] ?? 0) > 0)
@@ -525,9 +541,9 @@ export default function EssentiaPlanner() {
           </div>
           <button className={`ess-availability-button ${isPreferred ? 'is-preferred' : ''}`} type="button" aria-label={isExcluded ? `Restore ${displayItemName(item.name)} to recommendations` : isPreferred ? `Remove preference for ${displayItemName(item.name)}` : `Prefer ${displayItemName(item.name)}`} aria-pressed={isPreferred} title={isExcluded ? 'Restore to recommendations' : isPreferred ? 'Remove abundant item mark' : 'Have plenty — prefer in recommendations'} onClick={() => isExcluded ? restoreItem(item) : preferItem(item)}>{isExcluded ? <span aria-hidden="true">↶</span> : <StarIcon filled={isPreferred} />}</button>
         </div>
-      })}{catalog && !catalogSearching && filteredItems.length === 0 && unprofiledMatches.length === 0 && <p className="ess-no-results">Nothing found. Try another name or the Entire catalog filter.</p>}</div>
+      })}{catalog && catalogSearching && filteredItems.length === 0 && <p className="ess-no-results">Searching items…</p>}{catalog && !catalogSearching && filteredItems.length === 0 && unprofiledMatches.length === 0 && <p className="ess-no-results">Nothing found. Try another name or the Entire catalog filter.</p>}</div>
       {visibleCount < filteredItems.length && <button className="ess-show-more" type="button" onClick={() => setVisibleCount((count) => count + 30)}>Show 30 more <span>↓</span></button>}
-      {unprofiledMatches.length > 0 && <details className="ess-unprofiled" open={filteredItems.length === 0}><summary>{unprofiledMatches.length.toLocaleString('en-US')} items found in GTNH 2.9 without aspect profiles</summary><p>These items exist in the pack, but the current export does not include their furnace aspects. They are excluded from calculations.</p><div>{unprofiledMatches.slice(0, 24).map((item) => <div className="ess-unprofiled-row" key={item.registryId}><strong>{displayItemName(item.name)}</strong><small>{item.registryId}</small></div>)}</div>{unprofiledMatches.length > 24 && <small>Showing the first 24 matches. Refine your search for more.</small>}</details>}
+      {!catalogSearching && unprofiledMatches.length > 0 && <details className="ess-unprofiled" open={filteredItems.length === 0}><summary>{unprofiledMatches.length.toLocaleString('en-US')} items found in GTNH 2.9 without aspect profiles</summary><p>These items exist in the pack, but the current export does not include their furnace aspects. They are excluded from calculations.</p><div>{unprofiledMatches.slice(0, 24).map((item) => <div className="ess-unprofiled-row" key={item.registryId}><strong>{displayItemName(item.name)}</strong><small>{item.registryId}</small></div>)}</div>{unprofiledMatches.length > 24 && <small>Showing the first 24 matches. Refine your search for more.</small>}</details>}
       <details className="ess-data-note"><summary>About data and icons</summary><p>The catalog contains {catalog?.aspectSource?.count.toLocaleString('en-US') ?? '—'} profiles from GTNH {catalog?.aspectSource?.version ?? ''} and {(catalog?.aspectSource?.fallbackCounts?.['2.8.0'] ?? 0).toLocaleString('en-US')} additional profiles from GTNH 2.8.0. Matches were checked by ID, mod, and name; GTNH 2.9 data takes priority. Earlier profiles are labeled and can be used in calculations, but their 2.9 furnace behavior is unverified. Items without profiles appear only in search. Effort is estimated from {catalog?.acquisitionSource?.recipeCount.toLocaleString('en-US') ?? '—'} GTNH 2.9 machine and farm recipes; crafting table recipes are absent from this export. Icons come from <a href="https://github.com/ShadowTheAge/gtnh-2.7.4" target="_blank" rel="noreferrer">the GTNH atlas</a> and <a href="https://github.com/Samiracle64/gtnh-factory-flow" target="_blank" rel="noreferrer">the GTNH 2.9 resource index</a>.</p></details>
     </section>
   </div>

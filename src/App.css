@@ -380,7 +380,12 @@
   .ess-amount-control button{width:32px;height:32px}
   .ess-amount-control button::before{inset:3px}
 }
-.ess-refining{margin-left:auto;color:var(--muted);font-size:11px;font-weight:600}
+.ess-result{position:relative}
+.ess-update-indicator{position:absolute;top:20px;right:20px;display:inline-flex;align-items:center;gap:7px;min-height:25px;padding:3px 8px;border:1px solid var(--edge);border-radius:6px;color:var(--gold2);background:var(--surface2);font-size:10px;font-weight:700;white-space:nowrap}
+.ess-update-indicator::before,.ess-catalog-updating::before{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--gold);content:''}
+.ess-result.is-updating .ess-result-body,.ess-alternatives.is-updating .ess-alternative-grid{opacity:.76}
+.ess-catalog-summary{position:relative;min-height:17px}
+.ess-catalog-updating{position:absolute;right:0;display:inline-flex;align-items:center;gap:6px;color:var(--gold2);font-weight:700}
 .ess-picked-item .ess-picked-item-details{flex:1;min-width:0}
 .ess-picked-aspects{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0;margin-top:2px}
 .ess-picked-item .ess-aspect-tag{display:inline-flex;max-width:100%;padding:3px 7px 3px 3px;color:var(--text);font-size:10px;line-height:1.2;text-overflow:clip}
