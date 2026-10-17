@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import Image from 'next/image'
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import { buildPlans, itemSimplicity, key as itemKey, planFromLines, prepareItems } from '../lib/essentiaPlanner'
 import type { ItemAspect, Plan, PlanLine, Requirement } from '../lib/essentiaPlanner'
@@ -11,21 +12,36 @@ type CatalogFilter = 'allSelected' | 'anySelected' | 'allItems'
 type CatalogSort = 'practical' | 'quantity' | 'name'
 type Availability = { preferred: string[]; excluded: string[]; stage: string }
 const availabilityStorageKey = 'thaumaspects:availability:v2'
+const availabilityChangedEvent = 'thaumaspects:availability-changed'
+const defaultAvailability: Availability = { preferred: [], excluded: [], stage: 'NONE' }
 const stages = [
   ['NONE', 'No machines'], ['LV', 'LV'], ['MV', 'MV'], ['HV', 'HV'],
   ['IV', 'IV'], ['UV', 'UV'], ['MAX', 'All tiers'],
 ]
 
-function readAvailability(): Availability {
+function parseAvailability(raw: string): Availability {
   try {
-    const stored = JSON.parse(localStorage.getItem(availabilityStorageKey) ?? '{}') as Partial<Availability>
+    const stored = JSON.parse(raw || '{}') as Partial<Availability>
     return {
       preferred: Array.isArray(stored.preferred) ? stored.preferred.filter((value): value is string => typeof value === 'string') : [],
       excluded: Array.isArray(stored.excluded) ? stored.excluded.filter((value): value is string => typeof value === 'string') : [],
       stage: stages.some(([value]) => value === stored.stage) ? stored.stage! : 'NONE',
     }
   } catch {
-    return { preferred: [], excluded: [], stage: 'NONE' }
+    return defaultAvailability
+  }
+}
+
+function availabilitySnapshot() {
+  try { return window.localStorage.getItem(availabilityStorageKey) ?? '' } catch { return '' }
+}
+
+function subscribeAvailability(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  window.addEventListener(availabilityChangedEvent, onChange)
+  return () => {
+    window.removeEventListener('storage', onChange)
+    window.removeEventListener(availabilityChangedEvent, onChange)
   }
 }
 
@@ -77,7 +93,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   }
 
   return <div className="custom-select" ref={rootRef} onKeyDown={onKeyDown}>
-    <button ref={triggerRef} className="custom-select-trigger" type="button" aria-label={`${label}, ${options[selectedIndex][1]}`} aria-haspopup="listbox" aria-controls={listId} aria-expanded={open} aria-activedescendant={open ? `${listId}-${highlight}` : undefined} onClick={() => { setHighlight(selectedIndex); setOpen((current) => !current) }}><span>{options[selectedIndex][1]}</span><Chevron /></button>
+    <button ref={triggerRef} className="custom-select-trigger" type="button" aria-label={`${label}, ${options[selectedIndex][1]}`} aria-haspopup="listbox" aria-controls={listId} aria-expanded={open} onClick={() => { setHighlight(selectedIndex); setOpen((current) => !current) }}><span>{options[selectedIndex][1]}</span><Chevron /></button>
     {open && <div className="custom-select-menu" id={listId} role="listbox" aria-label={label}>{options.map(([option, text], index) => <button type="button" role="option" id={`${listId}-${index}`} aria-selected={value === option} className={index === highlight ? 'is-highlighted' : ''} key={option} onMouseEnter={() => setHighlight(index)} onClick={() => choose(option)}><span>{text}</span>{value === option && <span className="custom-select-check" aria-hidden="true">✓</span>}</button>)}</div>}
   </div>
 }
@@ -85,7 +101,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 function AspectIcon({ name }: { name: string }) {
   const [missing, setMissing] = useState(false)
   return missing ? <span className="ess-aspect-icon ess-aspect-fallback" aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>
-    : <img className="ess-aspect-icon" src={`/aspects/color/${name === 'strontio' ? 'stronito' : name}.png`} onError={() => setMissing(true)} alt="" />
+    : <Image className="ess-aspect-icon" src={`/aspects/color/${name === 'strontio' ? 'stronito' : name}.png`} width={25} height={25} onError={() => setMissing(true)} alt="" />
 }
 
 function AspectTag({ name, amount }: { name: string; amount?: number }) {
@@ -112,8 +128,8 @@ function ItemIcon({ item, large = false }: { item: ItemAspect; large?: boolean }
       : icon?.quality === 'generic' ? 'Exact icon unavailable; a game icon of this item type is shown'
         : undefined
   return <span className={`ess-item-icon ${large ? 'is-large' : ''} ${icon ? 'has-texture' : ''} ${icon && icon.quality !== 'exact' ? 'is-approximate' : ''}`} title={title} aria-hidden="true">
-    {icon?.kind === 'atlas' ? <span className="ess-atlas-sprite" style={{ backgroundPosition: `${-(icon.id % 256) * 32}px ${-Math.floor(icon.id / 256) * 32}px` }} />
-      : icon?.kind === 'rendered' ? <span className="ess-rendered-frame" style={{ width: frameSize, height: frameSize }}><img src={`/gt-icons/rendered/${icon.file}`} style={renderedStyle} alt="" /></span>
+    {icon?.kind === 'atlas' ? <Image className="ess-atlas-sprite" src={`/api/atlas-icons/${icon.id}`} width={32} height={32} alt="" />
+      : icon?.kind === 'rendered' ? <span className="ess-rendered-frame" style={{ width: frameSize, height: frameSize }}><Image src={`/gt-icons/rendered/${icon.file}`} width={sourceWidth} height={sourceHeight} style={renderedStyle} alt="" /></span>
         : <span>{cleanName.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()}</span>}
   </span>
 }
@@ -174,15 +190,23 @@ export default function EssentiaPlanner() {
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [alternativesOpen, setAlternativesOpen] = useState(false)
   const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set())
-  const [availability, setAvailability] = useState<Availability>(readAvailability)
+  const storedAvailability = useSyncExternalStore(subscribeAvailability, availabilitySnapshot, () => '')
+  const savedAvailability = useMemo(() => parseAvailability(storedAvailability), [storedAvailability])
+  const [volatileAvailability, setVolatileAvailability] = useState<Availability | null>(null)
+  const availability = volatileAvailability ?? savedAvailability
   const resultRef = useRef<HTMLDivElement>(null)
   const sourceSearchRef = useRef<HTMLInputElement>(null)
   const catalogSearchRef = useRef<HTMLInputElement>(null)
   const catalogRef = useRef<HTMLElement>(null)
 
-  useEffect(() => {
-    try { localStorage.setItem(availabilityStorageKey, JSON.stringify(availability)) } catch { /* Private mode can block storage. */ }
-  }, [availability])
+  const setAvailability = (update: Availability | ((current: Availability) => Availability)) => {
+    const next = typeof update === 'function' ? update(availability) : update
+    try {
+      window.localStorage.setItem(availabilityStorageKey, JSON.stringify(next))
+      setVolatileAvailability(null)
+      window.dispatchEvent(new Event(availabilityChangedEvent))
+    } catch { setVolatileAvailability(next) }
+  }
 
   useEffect(() => {
     const controller = new AbortController()

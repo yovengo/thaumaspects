@@ -1,16 +1,16 @@
 # Thaumaspects
 
-Thaumaspects is a modern reimagining of **Thaumcraft Research Helper**. It is based on the open-source [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) repository: its connection-finding logic, aspect data, and artwork were brought over and adapted into a React application.
+Thaumaspects is a GTNH research and essentia companion built with Next.js. It is based on the open-source [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) repository: its connection-finding logic, aspect data, and artwork were brought over and adapted into the site.
 
 Website: [thaumaspects.vercel.app](https://thaumaspects.vercel.app/)
 
-The helper finds aspect connections for Thaumcraft 4.x–5.x research. In addition to quick chain searching, it includes an interactive research map where you can drag aspects, place obstacles, choose start and end nodes, and automatically build a route.
+The helper finds aspect connections for GTNH research. In addition to quick chain searching, it includes an interactive research map where you can drag aspects, place obstacles, and automatically build routes.
 
 > **Technical note:** the project was developed iteratively, with priority given to validating the interface and research-map mechanics. As the feature set stabilizes, the application structure will be refined and parts of the implementation modularized.
 
 ## Features
 
-- Thaumcraft versions from 4.1 through 5.1.3.
+- GTNH-focused research map using Thaumcraft aspect relationships.
 - Forbidden Magic, Magic Bees, and GregTech add-ons.
 - Chain search that accounts for unavailable aspects.
 - An interactive, resizable hex map with drag-and-drop and obstacles.
@@ -25,7 +25,7 @@ The default plan searches combinations with a bounded beam search, so different 
 
 The result panel has a searchable source picker across every item containing a requested aspect. Exact item names appear first, and selecting a source immediately builds a custom furnace plan. The short list of recommended alternatives is deliberately ranked; it does not hide the remaining matching profiles from the source picker.
 
-The catalog contains 69 aspects. Item pictures use the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4) when a name and mod have a unique match, otherwise the exact rendered icon from the 2.9 resource index. A small number of items have no icon in either source and show initials instead. The picker also shows initials when an aspect icon is unavailable. Minecraft and mod textures belong to their respective creators.
+The catalog contains 69 aspects. Item pictures use the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4) when a name and mod have a unique match, otherwise the exact rendered icon from the 2.9 resource index. Atlas tiles are served individually through `/api/atlas-icons/[id]`; aspect and item pictures use Next.js `Image` optimization. A small number of items have no icon in either source and show initials instead. The picker also shows initials when an aspect icon is unavailable. Minecraft and mod textures belong to their respective creators.
 
 To regenerate the catalog from the downloaded Oracle resource index and recipe shards, GTNH Calculator 2.8.0-v5 binary, and GTNH Calculator 2.7.4 icon atlas index:
 
@@ -37,6 +37,8 @@ python3 scripts/build-acquisition-scores.py --resource-index /path/to/resource-i
 The generator validates unique registry IDs and preserves the source version of every fallback profile. The raw Oracle shards and calculator binaries are build inputs and are not committed. The planned infusion-recipe picker is outside the current scope.
 
 ## Getting started
+
+The Research Map is at `/`, and the Essentia Planner is at `/essentia`. Quick Search remains available from the Research Map.
 
 ```bash
 pnpm install

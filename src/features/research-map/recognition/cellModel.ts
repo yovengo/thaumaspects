@@ -59,7 +59,7 @@ function decodeTensor(tensor: QuantizedTensor): Tensor {
 
 export function loadCellModel() {
   if (!modelPromise) {
-    modelPromise = fetch(`${import.meta.env.BASE_URL}models/research-cell-model.json`)
+    modelPromise = fetch('/models/research-cell-model.json')
       .then((response) => {
         if (!response.ok) throw new Error('The local research recognition model could not be loaded.')
         return response.json() as Promise<SerializedCellModel>

@@ -1,15 +1,18 @@
+'use client'
+
+import Image from 'next/image'
+import Link from 'next/link'
 import { useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { addonDictionary } from './data/addons.js'
 import { translate } from './data/aspects.js'
 import { versionDictionary } from './data/versions.js'
 import EssentiaPlanner from './components/EssentiaPlanner'
-import './App.css'
 
 type Combinations = Record<string, [string, string]>
 type VersionDefinition = { base_aspects: string[]; combinations: Combinations }
 type AddonDefinition = { name: string; aspects: string[]; combinations: Combinations }
-type Mode = 'quick' | 'board' | 'essentia'
+type Mode = 'quick' | 'board'
 
 const aspectNames = translate as Record<string, string>
 const versionMap = versionDictionary as unknown as Record<string, VersionDefinition>
@@ -76,7 +79,7 @@ function findPath(from: string, to: string, minSpaces: number, combinations: Com
 }
 
 function AspectIcon({ aspect, muted = false }: { aspect: string; muted?: boolean }) {
-  return <img className="aspect-icon" src={icon(aspect, muted)} alt="" />
+  return <Image className="aspect-icon" src={icon(aspect, muted)} width={26} height={26} alt="" />
 }
 
 function WandIcon() {
@@ -215,7 +218,7 @@ function findBoardRouteCandidates(start: string, finish: string, length: number,
   return candidates.sort((a, b) => routeTurns(a) - routeTurns(b))
 }
 
-function App() {
+function App({ page }: { page: 'board' | 'essentia' }) {
   const catalog = useMemo(() => getCatalog(latestVersion), [])
   const [enabled, setEnabled] = useState<Set<string>>(() => defaultEnabled(getCatalog(latestVersion)))
   const [activeAddons, setActiveAddons] = useState<Set<string>>(() => new Set(['gt']))
@@ -391,15 +394,15 @@ function App() {
         <div className="brand-mark" aria-hidden="true">✦</div>
         <div className="brand-copy"><strong>Thaumaspects</strong></div>
         <nav className="primary-nav" aria-label="Main tools">
-          <button type="button" className={mode === 'board' || mode === 'quick' ? 'is-active' : ''} aria-current={mode === 'board' || mode === 'quick' ? 'page' : undefined} onClick={() => setMode('board')}><span aria-hidden="true">⬡</span> Research Map</button>
-          <button type="button" className={mode === 'essentia' ? 'is-active' : ''} aria-current={mode === 'essentia' ? 'page' : undefined} onClick={() => setMode('essentia')}><span aria-hidden="true">✧</span> Essentia Planner</button>
+          <Link href="/" className={page === 'board' ? 'is-active' : ''} aria-current={page === 'board' ? 'page' : undefined}><span aria-hidden="true">⬡</span> Research Map</Link>
+          <Link href="/essentia" className={page === 'essentia' ? 'is-active' : ''} aria-current={page === 'essentia' ? 'page' : undefined}><span aria-hidden="true">✧</span> Essentia Planner</Link>
         </nav>
         <span className="site-version">GTNH 2.9.0-beta-2</span>
       </header>
 
-      {mode === 'essentia' && <EssentiaPlanner />}
+      {page === 'essentia' && <EssentiaPlanner />}
 
-      {mode !== 'essentia' && <>
+      {page === 'board' && <>
         <div className="page-heading">
           <h1>{mode === 'quick' ? 'Quick Search' : 'Research Map'}</h1>
           <button className="secondary-link" type="button" onClick={() => setMode(mode === 'quick' ? 'board' : 'quick')}>{mode === 'quick' ? '← Back to map' : 'Quick Search ↗'}</button>

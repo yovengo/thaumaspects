@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import { recognizeResearchScreenshot, type RecognitionResult } from './screenshotRecognizer'
 
@@ -74,7 +75,7 @@ export function ScreenshotImporter({ aspects, onRecognized }: {
       if (file) void processImage(file)
       event.target.value = ''
     }} />
-    {previewUrl ? <img className="screenshot-preview" src={previewUrl} alt="Pasted research screenshot" /> : <span className="paste-glyph" aria-hidden="true">⌘V</span>}
+    {previewUrl ? <Image className="screenshot-preview" src={previewUrl} width={160} height={120} unoptimized alt="Pasted research screenshot" /> : <span className="paste-glyph" aria-hidden="true">⌘V</span>}
     <div className="screenshot-copy">
       <strong>{processing ? 'Reading the research note…' : result ? 'Screenshot imported' : 'Paste a research screenshot'}</strong>
       {!processing && !result && <span>Press Ctrl/Cmd+V anywhere on this page, drop an image here, or choose a file.</span>}

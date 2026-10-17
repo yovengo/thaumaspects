@@ -8,7 +8,11 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.pnpm-store
 dist
+.next
+next-env.d.ts
+*.tsbuildinfo
 dist-ssr
 *.local
 
