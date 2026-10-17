@@ -300,6 +300,15 @@
 .board-toolbar .board-status{flex:1 1 150px;text-align:right}
 .board-toolbar .board-action-buttons{margin-left:auto}
 .board-auto-button svg{width:21px;height:21px}
+.board-auto-button:disabled{opacity:.58}
+.board-solve-control{min-height:42px;color:var(--gold2)}
+.research-board.is-solving .board-layout{pointer-events:none}
+.board-route-lines.is-searching{z-index:3}
+.board-route-lines .board-search-line{stroke:var(--gold2);stroke-width:2.5;stroke-dasharray:4 5;opacity:.75;filter:drop-shadow(0 0 4px rgba(239,211,156,.45))}
+.board-cell.is-search-path:not(.has-aspect){background:#625269}
+.board-cell.is-search-endpoint:not(.has-aspect){background:#705c4d}
+.board-cell.is-reveal-new{animation:board-arrive .3s ease-out}
+@keyframes board-arrive{from{filter:brightness(1.7) drop-shadow(0 0 8px rgba(239,211,156,.7))}to{filter:brightness(1)}}
 .board-auto-label-short{display:none}
 .board-clear-button{color:var(--gold2)}
 .board-clear-button svg{width:23px;height:23px}
@@ -323,6 +332,7 @@
 @media(max-width:370px){
   .board-toolbar .board-action-buttons{display:grid;grid-template-columns:minmax(0,1fr) 42px;width:100%;margin-left:0}
   .board-auto-button{width:100%}
+  .board-solve-control{grid-column:1/-1}
 }
 
 /* A target is one editable recipe line, with quiet controls inside it. */

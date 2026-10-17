@@ -2,13 +2,17 @@ import { findAspectPath } from '../../lib/aspectGraph'
 import type { Catalog } from '../../types/domain'
 import { boardDistance, getBoardNeighbors, routeTurns } from './boardGeometry'
 
-export function findShortestBoardRoute(start: string, finish: string, occupied: Set<string>, boardSize: number) {
+export type BoardSearchProgress = { source: string; target: string; path: string[] }
+export type BoardSearchObserver = (progress: BoardSearchProgress) => void
+
+export function findShortestBoardRoute(start: string, finish: string, occupied: Set<string>, boardSize: number, onSearch?: BoardSearchObserver) {
   const queue: string[][] = [[start]]
   const visited = new Set([start])
 
   while (queue.length) {
     const route = queue.shift()!
     const current = route[route.length - 1]
+    onSearch?.({ source: start, target: finish, path: route })
     if (current === finish) return route
     for (const next of getBoardNeighbors(current, boardSize)) {
       if (visited.has(next) || (occupied.has(next) && next !== finish)) continue
@@ -19,12 +23,13 @@ export function findShortestBoardRoute(start: string, finish: string, occupied: 
   return null
 }
 
-export function findBoardRouteCandidates(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number, limit = 32) {
+export function findBoardRouteCandidates(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number, limit = 32, onSearch?: BoardSearchObserver) {
   let attempts = 0
   const candidates: string[][] = []
 
   const walk = (current: string, route: string[], visited: Set<string>) => {
     attempts += 1
+    if (attempts % 16 === 0) onSearch?.({ source: start, target: finish, path: route })
     if (attempts > 30000 || candidates.length >= limit) return
     const remainingEdges = length - route.length
     if (boardDistance(current, finish) > remainingEdges) return
@@ -66,6 +71,7 @@ export function solveAllAnchors(
   boardSize: number,
   catalog: Catalog,
   enabled: Set<string>,
+  onSearch?: BoardSearchObserver,
 ): SolvedBoard | { message: string } {
   const anchors = [...anchorCells].filter((id) => board[id] && !obstacles.has(id))
   if (anchors.length < 2) return { message: 'Place at least two source aspects on the map before using auto-connect.' }
@@ -81,7 +87,7 @@ export function solveAllAnchors(
     for (const target of remaining) {
       for (const source of connected) {
         const occupied = new Set([...Object.keys(workingBoard).filter((id) => id !== source && id !== target), ...obstacles])
-        const shortestRoute = findShortestBoardRoute(source, target, occupied, boardSize)
+        const shortestRoute = findShortestBoardRoute(source, target, occupied, boardSize, onSearch)
         if (!shortestRoute) continue
 
         for (let extraSpaces = 0; extraSpaces <= 2; extraSpaces += 1) {
@@ -93,7 +99,7 @@ export function solveAllAnchors(
             enabled,
           )
           if (!aspectPath) continue
-          const routeCandidates = findBoardRouteCandidates(source, target, aspectPath.length, occupied, boardSize, 12)
+          const routeCandidates = findBoardRouteCandidates(source, target, aspectPath.length, occupied, boardSize, 12, onSearch)
 
           for (const route of routeCandidates) {
             const futureNetwork = new Set([...connected, ...route])

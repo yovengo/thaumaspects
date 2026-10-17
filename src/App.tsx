@@ -2,12 +2,14 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { addonDictionary } from './data/addons.js'
 import { translate } from './data/aspects.js'
 import { versionDictionary } from './data/versions.js'
 import EssentiaPlanner from './components/EssentiaPlanner'
+import { solveAllAnchors, type BoardSearchProgress, type SolvedBoard } from './features/research-map/boardSolver'
+import type { SolveRequest, SolveResponse } from './features/research-map/boardSolver.worker'
 
 type Combinations = Record<string, [string, string]>
 type VersionDefinition = { base_aspects: string[]; combinations: Combinations }
@@ -117,6 +119,10 @@ const hexColumnStep = 46 + hexGap
 const hexRowStep = hexHeight + hexGap
 const cellId = (row: number, column: number) => `${row}-${column}`
 const parseCellId = (id: string) => id.split('-').map(Number) as [number, number]
+const routePoints = (route: string[]) => route.map((id) => {
+  const [row, column] = parseCellId(id)
+  return `${column * hexColumnStep + hexWidth / 2},${row * hexRowStep + (column % 2) * hexRowStep / 2 + hexHeight / 2}`
+}).join(' ')
 
 function isBoardCell(row: number, column: number, boardSize: number) {
   const radius = Math.floor(boardSize / 2)
@@ -131,91 +137,6 @@ function getBoardCells(boardSize: number) {
     row: Math.floor(index / boardSize),
     column: index % boardSize,
   })).filter(({ row, column }) => isBoardCell(row, column, boardSize))
-}
-
-function getBoardNeighbors(id: string, boardSize: number) {
-  const [row, column] = parseCellId(id)
-  const directions = column % 2 === 0
-    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
-    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]
-
-  return directions.map(([rowOffset, columnOffset]) => cellId(row + rowOffset, column + columnOffset))
-    .filter((next) => {
-      const [nextRow, nextColumn] = parseCellId(next)
-      return nextRow >= 0 && nextRow < boardSize && nextColumn >= 0 && nextColumn < boardSize && isBoardCell(nextRow, nextColumn, boardSize)
-    })
-}
-
-function findShortestBoardRoute(start: string, finish: string, occupied: Set<string>, boardSize: number) {
-  const queue: string[][] = [[start]]
-  const visited = new Set([start])
-
-  while (queue.length) {
-    const route = queue.shift()!
-    const current = route[route.length - 1]
-    if (current === finish) return route
-    for (const next of getBoardNeighbors(current, boardSize)) {
-      if (visited.has(next) || (occupied.has(next) && next !== finish)) continue
-      visited.add(next)
-      queue.push([...route, next])
-    }
-  }
-  return null
-}
-
-function toCube(id: string) {
-  const [row, column] = parseCellId(id)
-  const x = column
-  const z = row - Math.floor((column - (column & 1)) / 2)
-  return [x, -x - z, z]
-}
-
-function boardDistance(from: string, to: string) {
-  const a = toCube(from)
-  const b = toCube(to)
-  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]))
-}
-
-function routeTurns(route: string[]) {
-  let turns = 0
-  for (let index = 2; index < route.length; index += 1) {
-    const previous = toCube(route[index - 2])
-    const current = toCube(route[index - 1])
-    const next = toCube(route[index])
-    const firstDirection = current.map((value, axis) => value - previous[axis]).join(',')
-    const secondDirection = next.map((value, axis) => value - current[axis]).join(',')
-    if (firstDirection !== secondDirection) turns += 1
-  }
-  return turns
-}
-
-function findBoardRouteCandidates(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number, limit = 32) {
-  let attempts = 0
-  const candidates: string[][] = []
-
-  const walk = (current: string, route: string[], visited: Set<string>) => {
-    attempts += 1
-    if (attempts > 30000 || candidates.length >= limit) return
-    const remainingEdges = length - route.length
-    if (boardDistance(current, finish) > remainingEdges) return
-    if (route.length === length) {
-      if (current === finish) candidates.push(route)
-      return
-    }
-    const options = getBoardNeighbors(current, boardSize)
-      .filter((next) => !visited.has(next) && (!occupied.has(next) || next === finish))
-      .sort((a, b) => boardDistance(a, finish) - boardDistance(b, finish))
-
-    for (const next of options) {
-      if (next === finish && remainingEdges !== 1) continue
-      const nextVisited = new Set(visited)
-      nextVisited.add(next)
-      walk(next, [...route, next], nextVisited)
-    }
-  }
-
-  walk(start, [start], new Set([start]))
-  return candidates.sort((a, b) => routeTurns(a) - routeTurns(b))
 }
 
 function App({ page }: { page: 'board' | 'essentia' }) {
@@ -238,8 +159,23 @@ function App({ page }: { page: 'board' | 'essentia' }) {
   const [paletteQuery, setPaletteQuery] = useState('')
   const [pendingAspect, setPendingAspect] = useState<string | null>(null)
   const [boardSize, setBoardSize] = useState(defaultBoardSize)
+  const [solvePhase, setSolvePhase] = useState<'idle' | 'searching' | 'revealing'>('idle')
+  const [searchTrace, setSearchTrace] = useState<BoardSearchProgress | null>(null)
+  const [revealCell, setRevealCell] = useState<string | null>(null)
+  const workerRef = useRef<Worker | null>(null)
+  const revealFrameRef = useRef<number | null>(null)
+  const solveTokenRef = useRef(0)
+  const previousViewRef = useRef<{ board: Record<string, string>; routes: string[][] } | null>(null)
+  const finalBoardRef = useRef<{ result: SolvedBoard; anchorCount: number } | null>(null)
+
+  useEffect(() => () => {
+    solveTokenRef.current += 1
+    workerRef.current?.terminate()
+    if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current)
+  }, [])
 
   const toggleAddon = (id: string) => {
+    if (solvePhase !== 'idle') cancelSolve()
     const addon = addonMap[id]
     const active = activeAddons.has(id)
     setActiveAddons((previous) => {
@@ -293,69 +229,152 @@ function App({ page }: { page: 'board' | 'essentia' }) {
     setBoardMessage('Aspect moved.')
   }
 
+  const finishReveal = () => {
+    const final = finalBoardRef.current
+    if (!final) return
+    if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current)
+    revealFrameRef.current = null
+    finalBoardRef.current = null
+    previousViewRef.current = null
+    setBoard(final.result.board)
+    setBoardRoutes(final.result.routes)
+    setSearchTrace(null)
+    setRevealCell(null)
+    setSolvePhase('idle')
+    setBoardMessage(final.anchorCount + ' aspects connected.')
+  }
+
+  const cancelSolve = () => {
+    solveTokenRef.current += 1
+    workerRef.current?.terminate()
+    workerRef.current = null
+    if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current)
+    revealFrameRef.current = null
+    finalBoardRef.current = null
+    if (previousViewRef.current) {
+      setBoard(previousViewRef.current.board)
+      setBoardRoutes(previousViewRef.current.routes)
+    }
+    previousViewRef.current = null
+    setSearchTrace(null)
+    setRevealCell(null)
+    setSolvePhase('idle')
+    setBoardMessage('Search canceled.')
+  }
+
+  const startReveal = (solved: SolvedBoard, anchors: string[], token: number) => {
+    const seen = new Set(anchors)
+    const steps: string[] = []
+    solved.routes.forEach((route) => route.forEach((id) => {
+      if (!seen.has(id)) {
+        seen.add(id)
+        steps.push(id)
+      }
+    }))
+    finalBoardRef.current = { result: solved, anchorCount: anchors.length }
+    setSearchTrace(null)
+
+    if (steps.length === 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      finishReveal()
+      return
+    }
+
+    setSolvePhase('revealing')
+    setBoardMessage('Filling map…')
+    const stepDuration = Math.min(75, 900 / steps.length)
+    const started = performance.now()
+    let visibleCount = 0
+
+    const reveal = (now: number) => {
+      if (token !== solveTokenRef.current) return
+      const nextCount = Math.min(steps.length, Math.floor((now - started) / stepDuration) + 1)
+      if (nextCount > visibleCount) {
+        visibleCount = nextCount
+        const visible = new Set([...anchors, ...steps.slice(0, visibleCount)])
+        setBoard(Object.fromEntries([...visible].map((id) => [id, solved.board[id]])))
+        setBoardRoutes(solved.routes.map((route) => {
+          const prefix: string[] = []
+          for (const id of route) {
+            if (!visible.has(id)) break
+            prefix.push(id)
+          }
+          return prefix
+        }).filter((route) => route.length > 1))
+        setRevealCell(steps[visibleCount - 1])
+      }
+      if (visibleCount === steps.length) finishReveal()
+      else revealFrameRef.current = requestAnimationFrame(reveal)
+    }
+
+    revealFrameRef.current = requestAnimationFrame(reveal)
+  }
+
   const solveEntireMap = () => {
+    if (solvePhase !== 'idle') return
     const anchors = [...anchorCells].filter((id) => board[id] && !obstacles.has(id))
     if (anchors.length < 2) {
       setBoardMessage('Place two aspects first.')
       return
     }
 
-    const workingBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<string, string>
-    const connected = new Set<string>([anchors[0]])
-    const remaining = new Set(anchors.slice(1))
-    const routes: string[][] = []
+    const token = ++solveTokenRef.current
+    const initialBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<string, string>
+    previousViewRef.current = { board, routes: boardRoutes }
+    setBoard(initialBoard)
+    setBoardRoutes([])
+    setSearchTrace(null)
+    setSolvePhase('searching')
+    setBoardMessage('Searching paths…')
 
-    while (remaining.size) {
-      let best: { target: string; route: string[]; aspects: string[]; score: number } | null = null
-
-      for (const target of remaining) {
-        for (const source of connected) {
-          const occupied = new Set([...Object.keys(workingBoard).filter((id) => id !== source && id !== target), ...obstacles])
-          const shortestRoute = findShortestBoardRoute(source, target, occupied, boardSize)
-          if (!shortestRoute) continue
-
-          for (let extraSpaces = 0; extraSpaces <= 2; extraSpaces += 1) {
-            const aspectPath = findPath(workingBoard[source], workingBoard[target], Math.max(0, shortestRoute.length - 2 + extraSpaces), catalog.combinations, enabled)
-            if (!aspectPath) continue
-            const routeCandidates = findBoardRouteCandidates(source, target, aspectPath.length, occupied, boardSize, 12)
-
-            for (const route of routeCandidates) {
-              const futureNetwork = new Set([...connected, ...route])
-              const occupiedAfterRoute = new Set([...occupied, ...route.filter((id) => id !== target)])
-              let futurePenalty = 0
-
-              for (const futureTarget of remaining) {
-                if (futureTarget === target) continue
-                const distanceToNetwork = Math.min(...[...futureNetwork].map((id) => boardDistance(id, futureTarget)))
-                const hasExit = getBoardNeighbors(futureTarget, boardSize).some((id) => !occupiedAfterRoute.has(id) || futureNetwork.has(id))
-                futurePenalty += distanceToNetwork * 3 + (hasExit ? 0 : 100000)
-              }
-
-              const score = route.length * 1000 + routeTurns(route) * 12 + futurePenalty
-              if (!best || score < best.score) best = { target, route, aspects: aspectPath, score }
-            }
-          }
+    let settled = false
+    const receiveResult = (result: ReturnType<typeof solveAllAnchors>) => {
+      if (token !== solveTokenRef.current || settled) return
+      settled = true
+      workerRef.current?.terminate()
+      workerRef.current = null
+      if ('board' in result) {
+        startReveal(result, anchors, token)
+      } else {
+        if (previousViewRef.current) {
+          setBoard(previousViewRef.current.board)
+          setBoardRoutes(previousViewRef.current.routes)
         }
+        previousViewRef.current = null
+        setSearchTrace(null)
+        setSolvePhase('idle')
+        setBoardMessage(result.message)
       }
-
-      if (!best) {
-        setBoardMessage('Could not connect all aspects.')
-        return
-      }
-
-      best.route.forEach((id, index) => {
-        workingBoard[id] = best.aspects[index]
-        connected.add(id)
-      })
-      remaining.delete(best.target)
-      routes.push(best.route)
     }
 
-    setBoard(workingBoard)
-    setBoardRoutes(routes)
-    setBoardMessage(`${anchors.length} aspects connected.`)
+    const fallback = () => receiveResult(solveAllAnchors(board, anchorCells, obstacles, boardSize, catalog, enabled))
+
+    try {
+      const worker = new Worker(new URL('./features/research-map/boardSolver.worker.ts', import.meta.url))
+      workerRef.current = worker
+      worker.onmessage = (event: MessageEvent<SolveResponse>) => {
+        if (token !== solveTokenRef.current || settled) return
+        if (event.data.type === 'search') setSearchTrace(event.data.progress)
+        else if (event.data.type === 'complete') receiveResult(event.data.result)
+        else fallback()
+      }
+      worker.onerror = (event) => {
+        event.preventDefault()
+        if (token === solveTokenRef.current) fallback()
+      }
+      worker.postMessage({
+        board,
+        anchors,
+        obstacles: [...obstacles],
+        boardSize,
+        catalog,
+        enabled: [...enabled],
+      } satisfies SolveRequest)
+    } catch {
+      fallback()
+    }
   }
 
+  const searchCells = new Set(searchTrace?.path ?? [])
   const used = result ? result.slice(1, -1).reduce<Record<string, number>>((total, aspect) => ({ ...total, [aspect]: (total[aspect] ?? 0) + 1 }), {}) : {}
   const paletteAspects = catalog.aspects.filter((aspect) => enabled.has(aspect) && `${label(aspect)} ${aspect}`.toLocaleLowerCase().includes(paletteQuery.toLocaleLowerCase()))
   const boardRouteOrder = useMemo(() => {
@@ -405,7 +424,7 @@ function App({ page }: { page: 'board' | 'essentia' }) {
       {page === 'board' && <>
         <div className="page-heading">
           <h1>{mode === 'quick' ? 'Quick Search' : 'Research Map'}</h1>
-          <button className="secondary-link" type="button" onClick={() => setMode(mode === 'quick' ? 'board' : 'quick')}>{mode === 'quick' ? '← Back to map' : 'Quick Search ↗'}</button>
+          <button className="secondary-link" type="button" onClick={() => { if (solvePhase !== 'idle') cancelSolve(); setMode(mode === 'quick' ? 'board' : 'quick') }}>{mode === 'quick' ? '← Back to map' : 'Quick Search ↗'}</button>
         </div>
 
         {mode === 'quick' && <section className="quick-layout" aria-label="Quick aspect search">
@@ -421,30 +440,30 @@ function App({ page }: { page: 'board' | 'essentia' }) {
         </section>}
 
         {mode === 'board' && <>
-          <section className="panel research-board" aria-label="Research map">
+          <section className={`panel research-board ${solvePhase !== 'idle' ? 'is-solving' : ''}`} aria-label="Research map">
             <div className="board-toolbar">
-              <div className="board-radius" role="group" aria-label="Map radius"><span>Rings</span><div className="board-radius-stepper"><button type="button" aria-label="Decrease map radius" disabled={boardSize <= 5} onClick={() => changeBoardSize(boardSize - 2)}>−</button><output aria-live="polite">{Math.floor(boardSize / 2)}</output><button type="button" aria-label="Increase map radius" disabled={boardSize >= 15} onClick={() => changeBoardSize(boardSize + 2)}>+</button></div></div>
+              <div className="board-radius" role="group" aria-label="Map radius"><span>Rings</span><div className="board-radius-stepper"><button type="button" aria-label="Decrease map radius" disabled={boardSize <= 5 || solvePhase !== 'idle'} onClick={() => changeBoardSize(boardSize - 2)}>−</button><output aria-live="polite">{Math.floor(boardSize / 2)}</output><button type="button" aria-label="Increase map radius" disabled={boardSize >= 15 || solvePhase !== 'idle'} onClick={() => changeBoardSize(boardSize + 2)}>+</button></div></div>
               <p className="board-status" role="status">{boardMessage}</p>
-              <div className="board-action-buttons"><button className="primary-button board-auto-button" type="button" aria-label="Auto-connect all" onClick={solveEntireMap}><WandIcon /><span className="board-auto-label-full">Auto-connect all</span><span className="board-auto-label-short">Connect all</span></button><button className="quiet-button board-clear-button" type="button" aria-label="Clear map" title="Clear map" onClick={() => { setBoard({}); setAnchorCells(new Set()); setObstacles(new Set()); setBoardRoutes([]); setBoardMessage('') }}><BroomIcon /></button></div>
+              <div className="board-action-buttons">{solvePhase !== 'idle' && <button className="quiet-button board-solve-control" type="button" onClick={solvePhase === 'searching' ? cancelSolve : finishReveal}>{solvePhase === 'searching' ? 'Cancel' : 'Show result'}</button>}<button className="primary-button board-auto-button" type="button" aria-label="Auto-connect all" disabled={solvePhase !== 'idle'} onClick={solveEntireMap}><WandIcon /><span className="board-auto-label-full">Auto-connect all</span><span className="board-auto-label-short">Connect all</span></button><button className="quiet-button board-clear-button" type="button" aria-label="Clear map" title="Clear map" disabled={solvePhase !== 'idle'} onClick={() => { setBoard({}); setAnchorCells(new Set()); setObstacles(new Set()); setBoardRoutes([]); setBoardMessage('') }}><BroomIcon /></button></div>
             </div>
-            <div className="board-layout" style={{ '--board-map-height': `${boardMapHeight}px` } as CSSProperties}><aside className="board-palette"><div className="palette-heading"><strong>{pendingAspect ? `${label(pendingAspect)} selected` : 'Aspects'}</strong></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search map aspects" /><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" className={pendingAspect === aspect ? 'is-active' : ''} aria-pressed={pendingAspect === aspect} draggable onDragStart={(event) => { dragRef.current = true; event.dataTransfer.setData('text/aspect', aspect) }} onDragEnd={() => window.setTimeout(() => { dragRef.current = false }, 0)} onClick={() => setPendingAspect(aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}{paletteAspects.length === 0 && <p className="palette-empty">No aspects found.</p>}</div></aside>
-              <div className="board-main"><div className="board-grid"><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth, height: boardCanvasHeight }}>{boardRoutes.length > 0 && <svg className="board-route-lines" aria-hidden="true">{boardRoutes.map((route, index) => <polyline key={index} points={route.map((id) => { const [row, column] = parseCellId(id); return `${column * hexColumnStep + hexWidth / 2},${row * hexRowStep + (column % 2) * hexRowStep / 2 + hexHeight / 2}` }).join(' ')} />)}</svg>}{getBoardCells(boardSize).map(({ row, column }) => {
+            <div className="board-layout" style={{ '--board-map-height': `${boardMapHeight}px` } as CSSProperties}><aside className="board-palette"><div className="palette-heading"><strong>{pendingAspect ? `${label(pendingAspect)} selected` : 'Aspects'}</strong></div><input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search aspects…" aria-label="Search map aspects" /><div className="palette-list">{paletteAspects.map((aspect) => <button type="button" className={pendingAspect === aspect ? 'is-active' : ''} aria-pressed={pendingAspect === aspect} disabled={solvePhase !== 'idle'} draggable={solvePhase === 'idle'} onDragStart={(event) => { dragRef.current = true; event.dataTransfer.setData('text/aspect', aspect) }} onDragEnd={() => window.setTimeout(() => { dragRef.current = false }, 0)} onClick={() => setPendingAspect(aspect)} key={aspect}><AspectIcon aspect={aspect} /><span>{label(aspect)}</span><small>{aspect}</small></button>)}{paletteAspects.length === 0 && <p className="palette-empty">No aspects found.</p>}</div></aside>
+              <div className="board-main"><div className="board-grid" aria-busy={solvePhase !== 'idle'}><div className="board-grid-canvas" style={{ width: (boardSize - 1) * hexColumnStep + hexWidth, height: boardCanvasHeight }}>{(boardRoutes.length > 0 || (searchTrace?.path.length ?? 0) > 1) && <svg className={`board-route-lines ${solvePhase === 'searching' ? 'is-searching' : ''}`} aria-hidden="true">{boardRoutes.map((route, index) => <polyline key={index} points={routePoints(route)} />)}{solvePhase === 'searching' && searchTrace && <polyline className="board-search-line" points={routePoints(searchTrace.path)} />}</svg>}{getBoardCells(boardSize).map(({ row, column }) => {
                 const id = cellId(row, column)
                 const aspect = board[id]
                 const routeNumber = boardRouteOrder.get(id)
                 const blocked = obstacles.has(id)
                 const activateCell = () => {
-                  if (dragRef.current) return
+                  if (dragRef.current || solvePhase !== 'idle') return
                   if (pendingAspect && !blocked) { placeAspect(id, pendingAspect); setPendingAspect(null) }
                   else toggleObstacle(id)
                 }
-                return <div key={id} role={aspect ? 'group' : 'button'} tabIndex={0} aria-label={aspect ? `${label(aspect)} on cell ${id}` : `Cell ${id}, ${blocked ? 'blocked' : 'open'}`} aria-pressed={aspect ? undefined : blocked} style={{ left: column * hexColumnStep, top: row * hexRowStep + (column % 2) * hexRowStep / 2 }} draggable={Boolean(aspect)} onDragStart={(event) => { if (aspect) { dragRef.current = true; event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} onDragEnd={() => window.setTimeout(() => { dragRef.current = false }, 0)} className={`board-cell ${aspect ? 'has-aspect' : ''} ${anchorCells.has(id) ? 'is-anchor' : ''} ${blocked ? 'is-blocked' : ''} ${routeNumber !== undefined ? 'is-route' : ''}`} onDragOver={(event) => { if (!blocked) event.preventDefault() }} onDrop={(event) => { event.preventDefault(); dragRef.current = true; const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped); window.setTimeout(() => { dragRef.current = false }, 0) }} onClick={aspect ? undefined : activateCell} onKeyDown={(event) => { if (!aspect && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); activateCell() } }}>{blocked ? <span className="blocked-mark" aria-hidden="true">×</span> : aspect && <>{routeNumber !== undefined && <span className="cell-order">{routeNumber}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setAnchorCells((previous) => { const next = new Set(previous); next.delete(id); return next }); setBoardRoutes([]) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
+                return <div key={id} role={aspect ? 'group' : 'button'} tabIndex={solvePhase === 'idle' ? 0 : -1} aria-disabled={solvePhase !== 'idle'} aria-label={aspect ? `${label(aspect)} on cell ${id}` : `Cell ${id}, ${blocked ? 'blocked' : 'open'}`} aria-pressed={aspect ? undefined : blocked} style={{ left: column * hexColumnStep, top: row * hexRowStep + (column % 2) * hexRowStep / 2 }} draggable={Boolean(aspect) && solvePhase === 'idle'} onDragStart={(event) => { if (aspect) { dragRef.current = true; event.dataTransfer.setData('text/aspect', aspect); event.dataTransfer.setData('text/board-cell', id) } }} onDragEnd={() => window.setTimeout(() => { dragRef.current = false }, 0)} className={`board-cell ${aspect ? 'has-aspect' : ''} ${anchorCells.has(id) ? 'is-anchor' : ''} ${blocked ? 'is-blocked' : ''} ${routeNumber !== undefined ? 'is-route' : ''} ${searchCells.has(id) ? 'is-search-path' : ''} ${searchTrace?.source === id || searchTrace?.target === id ? 'is-search-endpoint' : ''} ${revealCell === id ? 'is-reveal-new' : ''}`} onDragOver={(event) => { if (!blocked && solvePhase === 'idle') event.preventDefault() }} onDrop={(event) => { event.preventDefault(); if (solvePhase !== 'idle') return; dragRef.current = true; const source = event.dataTransfer.getData('text/board-cell'); const dropped = event.dataTransfer.getData('text/aspect'); if (source) moveAspect(source, id); else if (dropped && !blocked) placeAspect(id, dropped); window.setTimeout(() => { dragRef.current = false }, 0) }} onClick={aspect ? undefined : activateCell} onKeyDown={(event) => { if (solvePhase === 'idle' && !aspect && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); activateCell() } }}>{blocked ? <span className="blocked-mark" aria-hidden="true">×</span> : aspect && <>{routeNumber !== undefined && <span className="cell-order">{routeNumber}</span>}<AspectIcon aspect={aspect} /><b>{label(aspect)}</b><small>{aspect}</small><button type="button" className="remove-cell" disabled={solvePhase !== 'idle'} onClick={(event) => { event.stopPropagation(); setBoard((previous) => { const next = { ...previous }; delete next[id]; return next }); setAnchorCells((previous) => { const next = new Set(previous); next.delete(id); return next }); setBoardRoutes([]) }} aria-label={`Remove ${label(aspect)} from the map`}>×</button></>}</div>
               })}</div></div>
               </div></div>
           </section>
         </>}
 
-        <section className="panel aspect-settings"><button className="settings-toggle" type="button" aria-expanded={aspectsOpen} onClick={() => setAspectsOpen((current) => !current)}><span><span className="settings-icon" aria-hidden="true">⚙</span><strong>Available Aspects</strong>{unavailableCount > 0 && <small>{unavailableCount} excluded</small>}</span><span aria-hidden="true">{aspectsOpen ? '−' : '+'}</span></button>{aspectsOpen && <div className="settings-content"><div className="inventory-header"><div className="inventory-actions"><button type="button" onClick={() => { setEnabled(new Set(catalog.aspects)); setActiveAddons(new Set(addonEntries.map(([id]) => id))) }}>Select all</button><button type="button" onClick={() => { setEnabled(new Set()); setActiveAddons(new Set()) }}>Deselect all</button></div></div><div className="addons">{addonEntries.map(([id, addon]) => <label key={id}><input type="checkbox" checked={activeAddons.has(id)} onChange={() => toggleAddon(id)} /> <span>{addon.name}</span></label>)}</div><div className="aspect-grid">{catalog.aspects.map((aspect) => { const available = enabled.has(aspect); const parts = catalog.combinations[aspect]; return <button className={`aspect-card ${available ? '' : 'is-disabled'}`} type="button" aria-pressed={available} key={aspect} onClick={() => setEnabled((previous) => { const next = new Set(previous); if (available) next.delete(aspect); else next.add(aspect); return next })} title={parts ? `${label(parts[0])} + ${label(parts[1])}` : 'Primal aspect'}><AspectIcon aspect={aspect} muted={!available} /><span>{label(aspect)}</span><small>{aspect}</small>{parts && <em>{parts.map(label).join(' + ')}</em>}</button> })}</div></div>}</section>
+        <section className="panel aspect-settings" inert={solvePhase !== 'idle'}><button className="settings-toggle" type="button" aria-expanded={aspectsOpen} onClick={() => setAspectsOpen((current) => !current)}><span><span className="settings-icon" aria-hidden="true">⚙</span><strong>Available Aspects</strong>{unavailableCount > 0 && <small>{unavailableCount} excluded</small>}</span><span aria-hidden="true">{aspectsOpen ? '−' : '+'}</span></button>{aspectsOpen && <div className="settings-content"><div className="inventory-header"><div className="inventory-actions"><button type="button" onClick={() => { setEnabled(new Set(catalog.aspects)); setActiveAddons(new Set(addonEntries.map(([id]) => id))) }}>Select all</button><button type="button" onClick={() => { setEnabled(new Set()); setActiveAddons(new Set()) }}>Deselect all</button></div></div><div className="addons">{addonEntries.map(([id, addon]) => <label key={id}><input type="checkbox" checked={activeAddons.has(id)} onChange={() => toggleAddon(id)} /> <span>{addon.name}</span></label>)}</div><div className="aspect-grid">{catalog.aspects.map((aspect) => { const available = enabled.has(aspect); const parts = catalog.combinations[aspect]; return <button className={`aspect-card ${available ? '' : 'is-disabled'}`} type="button" aria-pressed={available} key={aspect} onClick={() => setEnabled((previous) => { const next = new Set(previous); if (available) next.delete(aspect); else next.add(aspect); return next })} title={parts ? `${label(parts[0])} + ${label(parts[1])}` : 'Primal aspect'}><AspectIcon aspect={aspect} muted={!available} /><span>{label(aspect)}</span><small>{aspect}</small>{parts && <em>{parts.map(label).join(' + ')}</em>}</button> })}</div></div>}</section>
       </>}
 
       <footer><a href="https://github.com/ythri/tcresearch/tree/gh-pages" target="_blank" rel="noreferrer">ythri/tcresearch</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a> · <a href="https://github.com/yovengo/thaumaspects" target="_blank" rel="noreferrer">Source code</a></footer>
