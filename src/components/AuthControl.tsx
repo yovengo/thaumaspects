@@ -5,6 +5,12 @@ import type { FormEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/lib/apiClient'
 import { codeKey } from '@/lib/queryKeys'
+import {
+  forgetRecentAccessCode,
+  type RecentAccessCode,
+  readRecentAccessCodes,
+  rememberRecentAccessCode,
+} from '@/lib/recentAccessCodes'
 import { useAuth } from './AuthProvider'
 
 type Feedback = { kind: 'pending' | 'success'; label: string }
@@ -87,6 +93,20 @@ function CheckIcon() {
     </svg>
   )
 }
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  )
+}
 
 function formatCodeInput(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 10)
@@ -104,6 +124,7 @@ export default function AuthControl() {
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [closing, setClosing] = useState(false)
   const [iconOverride, setIconOverride] = useState<boolean | null>(null)
+  const [recentCodes, setRecentCodes] = useState<RecentAccessCode[]>([])
   const showAccountIcon = iconOverride ?? showSignedInIcon
   const codeQuery = useQuery({
     queryKey: codeKey(user?.id ?? ''),
@@ -164,6 +185,9 @@ export default function AuthControl() {
   useEffect(() => {
     if (open && !user && !feedback) inputRef.current?.focus()
   }, [open, user, feedback])
+  useEffect(() => {
+    if (!user) setRecentCodes(readRecentAccessCodes())
+  }, [user])
   const act = async (action: () => Promise<void>) => {
     setBusy(true)
     setError('')
@@ -220,7 +244,10 @@ export default function AuthControl() {
     event.preventDefault()
     void act(async () => {
       const result = await api<{ code: string }>('/api/auth/code', 'POST', { code })
-      if (user) queryClient.setQueryData(codeKey(user.id), result)
+      if (user) {
+        queryClient.setQueryData(codeKey(user.id), result)
+        rememberRecentAccessCode(user.id, result.code)
+      }
       setCode('')
     })
   }
@@ -255,7 +282,13 @@ export default function AuthControl() {
         aria-controls={open ? 'account-popover' : undefined}
         title={showAccountIcon ? 'Account' : 'Sign in'}
         disabled={loading || busy}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => {
+          if (open) close()
+          else {
+            setRecentCodes(readRecentAccessCodes())
+            setOpen(true)
+          }
+        }}
       >
         <span className="account-trigger-symbol" key={showAccountIcon ? 'account' : 'key'}>
           {showAccountIcon ? <AccountIcon /> : <KeyIcon />}
@@ -360,6 +393,48 @@ export default function AuthControl() {
                   <ArrowIcon />
                 </button>
               </form>
+              {recentCodes.length > 0 && (
+                <div className="account-recent">
+                  <div className="account-recent-heading">
+                    <span>Recent codes</span>
+                    <span>On this device</span>
+                  </div>
+                  <ul className="account-recent-list">
+                    {recentCodes.map((saved) => (
+                      <li className="account-recent-item" key={saved.userId}>
+                        <button
+                          className="account-recent-choice"
+                          type="button"
+                          aria-label={`Sign in with saved code ${saved.code}`}
+                          disabled={busy}
+                          onClick={() => {
+                            setCode(saved.code)
+                            void authAction(
+                              () => login(saved.code),
+                              'Signing in…',
+                              'Signed in',
+                              true,
+                            )
+                          }}
+                        >
+                          <KeyIcon />
+                          <span>{saved.code}</span>
+                          <ArrowIcon />
+                        </button>
+                        <button
+                          className="account-recent-remove"
+                          type="button"
+                          aria-label={`Forget saved code ${saved.code}`}
+                          title="Forget code"
+                          onClick={() => setRecentCodes(forgetRecentAccessCode(saved.code))}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <button
                 className="account-create"
                 type="button"

@@ -73,7 +73,7 @@ The sign-in code is the only account credential. Losing it **and** all signed-in
 
 The first sign-in merges anonymous local favorites with the cloud account once. Later visits use the cloud state, so an item removed on another device stays removed. Offline changes are queued locally and retried when connectivity returns. Availability exclusions and progression tier remain local settings.
 
-TanStack Query keeps session, access code, and favorite responses in the current browser tab. The code is fetched on demand once after a page load, or taken directly from a successful sign-in or registration response. Pending favorite edits are sent in batches; the returned list updates the cache without a follow-up GET. A visible tab refreshes remote favorites when its cached list is older than one minute.
+TanStack Query keeps session, access code, and favorite responses in the current browser tab. The code is fetched once when restoring an account that is not already in the local recent-code list, or taken directly from a successful sign-in or registration response. The three most recently used unique access codes are stored unencrypted in this browser's `localStorage` until removed in the sign-in menu or cleared with browser data. Pending favorite edits are sent in batches; the returned list updates the cache without a follow-up GET. A visible tab refreshes remote favorites when its cached list is older than one minute.
 
 The GTNH item catalog is also cached for 30 minutes after leaving the planner, so switching between the map and planner does not download and prepare it again.
 

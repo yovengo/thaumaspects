@@ -3409,6 +3409,95 @@ footer a {
   width: 19px;
   height: 19px;
 }
+.account-recent {
+  margin-top: 14px;
+}
+.account-recent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.account-recent-heading span:last-child {
+  color: var(--faint);
+  font-weight: 500;
+}
+.account-recent-list {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.account-recent-item {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: #1b171d;
+}
+.account-recent-choice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.account-recent-choice:hover {
+  color: var(--gold2);
+  background: #302932;
+}
+.account-recent-choice:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.account-recent-choice span {
+  flex: 1;
+  font: 700 12px / 1 monospace;
+  letter-spacing: 0.05em;
+}
+.account-recent-choice svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--muted);
+}
+.account-recent-choice svg:last-child {
+  width: 12px;
+  height: 12px;
+  color: var(--gold2);
+}
+.account-recent-remove {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  flex: none;
+  border: 0;
+  border-left: 1px solid var(--edge);
+  color: var(--faint);
+  background: transparent;
+  cursor: pointer;
+}
+.account-recent-remove:hover {
+  color: var(--text);
+  background: #302932;
+}
+.account-recent-remove svg {
+  width: 13px;
+  height: 13px;
+}
 .account-create {
   display: flex;
   align-items: center;
@@ -3505,7 +3594,9 @@ footer a {
 }
 .account-create:focus-visible,
 .account-signout:focus-visible,
-.account-code-row button:focus-visible {
+.account-code-row button:focus-visible,
+.account-recent-choice:focus-visible,
+.account-recent-remove:focus-visible {
   outline: 2px solid var(--gold2);
   outline-offset: 2px;
 }

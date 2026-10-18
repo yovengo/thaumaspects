@@ -11,6 +11,7 @@ import {
   remainingFavoriteChanges,
 } from '@/lib/favoriteSync'
 import { codeKey, favoritesKey, sessionKey } from '@/lib/queryKeys'
+import { readRecentAccessCodes, rememberRecentAccessCode } from '@/lib/recentAccessCodes'
 
 type User = { id: string }
 type Availability = { preferred: string[]; excluded: string[]; stage: string }
@@ -211,6 +212,21 @@ export function AuthProvider({
   }, [activate, session.data, session.isPending])
 
   useEffect(() => {
+    if (!user || readRecentAccessCodes().some((entry) => entry.userId === user.id)) return
+    const userId = user.id
+    void queryClient
+      .fetchQuery({
+        queryKey: codeKey(userId),
+        queryFn: () => api<{ code: string | null }>('/api/auth/code'),
+        staleTime: Infinity,
+      })
+      .then(({ code }) => {
+        if (code) rememberRecentAccessCode(userId, code)
+      })
+      .catch(() => {})
+  }, [user, queryClient])
+
+  useEffect(() => {
     const retry = () => {
       if (userRef.current) void syncAccount(userRef.current.id)
     }
@@ -231,11 +247,13 @@ export function AuthProvider({
     queryClient.setQueryData(codeKey(result.user.id), {
       code: `${digits.slice(0, 5)}-${digits.slice(5)}`,
     })
+    rememberRecentAccessCode(result.user.id, `${digits.slice(0, 5)}-${digits.slice(5)}`)
     await activate(result.user, true)
   }
   const register = async () => {
     const result = await api<{ user: User; code: string }>('/api/auth/register', 'POST')
     queryClient.setQueryData(codeKey(result.user.id), { code: result.code })
+    rememberRecentAccessCode(result.user.id, result.code)
     await activate(result.user, true)
     return result.code
   }
@@ -257,7 +275,10 @@ export function AuthProvider({
   }
   const rotate = async () => {
     const result = await api<{ code: string }>('/api/auth/rotate-code', 'POST')
-    if (userRef.current) queryClient.setQueryData(codeKey(userRef.current.id), result)
+    if (userRef.current) {
+      queryClient.setQueryData(codeKey(userRef.current.id), result)
+      rememberRecentAccessCode(userRef.current.id, result.code)
+    }
     return result.code
   }
   const favoritesChanged = (before: string[], after: string[]) => {
