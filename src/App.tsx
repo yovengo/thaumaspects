@@ -479,7 +479,9 @@ function App({ page }: { page: 'board' | 'essentia' }) {
       <header className="site-header">
         <Link href="/" className="site-brand" aria-label="Thaumaspects home">
           <div className="brand-mark" aria-hidden="true">
-            ✦
+            <svg viewBox="0 0 24 24" fill="currentColor" focusable="false" aria-hidden="true">
+              <path d="M12 1.5 15.1 8.9 22.5 12 15.1 15.1 12 22.5 8.9 15.1 1.5 12 8.9 8.9Z" />
+            </svg>
           </div>
           <div className="brand-copy">
             <strong>Thaumaspects</strong>

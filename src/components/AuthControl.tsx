@@ -7,6 +7,8 @@ import { api } from '@/lib/apiClient'
 import { codeKey } from '@/lib/queryKeys'
 import { useAuth } from './AuthProvider'
 
+type Feedback = { kind: 'pending' | 'success'; label: string }
+
 function KeyIcon() {
   return (
     <svg
@@ -99,6 +101,8 @@ export default function AuthControl() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [closing, setClosing] = useState(false)
   const codeQuery = useQuery({
     queryKey: codeKey(user?.id ?? ''),
     queryFn: () => api<{ code: string | null }>('/api/auth/code'),
@@ -111,13 +115,30 @@ export default function AuthControl() {
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const operation = useRef(0)
   const close = useCallback((restoreFocus = false) => {
+    operation.current += 1
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
+    if (closeTimer.current) clearTimeout(closeTimer.current)
     setOpen(false)
     setCode('')
     setCopied(false)
     setError('')
+    setBusy(false)
+    setFeedback(null)
+    setClosing(false)
     if (restoreFocus) triggerRef.current?.focus()
   }, [])
+
+  useEffect(
+    () => () => {
+      if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -138,8 +159,8 @@ export default function AuthControl() {
     }
   }, [open, close])
   useEffect(() => {
-    if (open && !user) inputRef.current?.focus()
-  }, [open, user])
+    if (open && !user && !feedback) inputRef.current?.focus()
+  }, [open, user, feedback])
   const act = async (action: () => Promise<void>) => {
     setBusy(true)
     setError('')
@@ -151,12 +172,42 @@ export default function AuthControl() {
       setBusy(false)
     }
   }
+  const authAction = async (
+    action: () => Promise<void>,
+    pendingLabel: string,
+    successLabel: string,
+  ) => {
+    const currentOperation = ++operation.current
+    setBusy(true)
+    setError('')
+    setFeedback({ kind: 'pending', label: pendingLabel })
+    try {
+      await action()
+      if (operation.current !== currentOperation) return
+      setFeedback({ kind: 'success', label: successLabel })
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      feedbackTimer.current = setTimeout(
+        () => {
+          if (operation.current !== currentOperation) return
+          if (reducedMotion) close(true)
+          else {
+            setClosing(true)
+            closeTimer.current = setTimeout(() => close(true), 180)
+          }
+        },
+        reducedMotion ? 650 : 900,
+      )
+    } catch (cause) {
+      if (operation.current !== currentOperation) return
+      setFeedback(null)
+      setError(cause instanceof Error ? cause.message : 'Request failed.')
+    } finally {
+      if (operation.current === currentOperation) setBusy(false)
+    }
+  }
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    void act(async () => {
-      await login(code)
-      close(true)
-    })
+    void authAction(() => login(code), 'Signing in…', 'Signed in')
   }
   const confirm = (event: FormEvent) => {
     event.preventDefault()
@@ -173,37 +224,56 @@ export default function AuthControl() {
       .then(() => setCopied(true))
       .catch(() => setError('Copy failed. Select the code to copy it.'))
   }
-  const accountLabel = showSignedInIcon
-    ? loading
-      ? 'Account, checking session'
-      : 'Account, signed in'
-    : 'Sign in'
+  const signingOut = feedback?.label === 'Signing out…' || feedback?.label === 'Signed out'
+  const showAccountIcon = showSignedInIcon || signingOut
+  const accountLabel = feedback
+    ? feedback.label
+    : showSignedInIcon
+      ? loading
+        ? 'Account, checking session'
+        : 'Account, signed in'
+      : 'Sign in'
 
   return (
     <div className="account-control" ref={rootRef}>
       <button
         ref={triggerRef}
-        className={`account-trigger${showSignedInIcon ? ' is-signed-in' : ''}`}
+        className={`account-trigger${showAccountIcon ? ' is-signed-in' : ''}`}
         type="button"
-        aria-label={syncError && user ? `${accountLabel}, favorites waiting to sync` : accountLabel}
+        aria-label={
+          syncError && user && !feedback
+            ? `${accountLabel}, favorites waiting to sync`
+            : accountLabel
+        }
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-controls={open ? 'account-popover' : undefined}
-        title={showSignedInIcon ? 'Account' : 'Sign in'}
-        disabled={loading}
+        title={showAccountIcon ? 'Account' : 'Sign in'}
+        disabled={loading || busy}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        {showSignedInIcon ? <AccountIcon /> : <KeyIcon />}
+        {showAccountIcon ? <AccountIcon /> : <KeyIcon />}
         {syncError && user && <span className="account-sync-dot" aria-hidden="true" />}
       </button>
       {open && (
         <div
           id="account-popover"
-          className="account-popover"
+          className={`account-popover${closing ? ' is-closing' : ''}`}
           role="dialog"
-          aria-label={user ? 'Account' : 'Sign in'}
+          aria-label={feedback ? 'Account status' : user ? 'Account' : 'Sign in'}
         >
-          {user ? (
+          {feedback ? (
+            <div
+              className={`account-feedback is-${feedback.kind}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className="account-feedback-icon" aria-hidden="true">
+                {feedback.kind === 'success' ? <CheckIcon /> : <KeyIcon />}
+              </span>
+              <strong>{feedback.label}</strong>
+            </div>
+          ) : user ? (
             <>
               {codeQuery.isPending ? (
                 <div className="account-code-row is-loading" role="status">
@@ -253,12 +323,7 @@ export default function AuthControl() {
                 className="account-signout"
                 type="button"
                 disabled={busy}
-                onClick={() =>
-                  void act(async () => {
-                    await logout()
-                    close(true)
-                  })
-                }
+                onClick={() => void authAction(logout, 'Signing out…', 'Signed out')}
               >
                 Sign out
               </button>
@@ -291,9 +356,13 @@ export default function AuthControl() {
                 type="button"
                 disabled={busy}
                 onClick={() =>
-                  void act(async () => {
-                    await register()
-                  })
+                  void authAction(
+                    async () => {
+                      await register()
+                    },
+                    'Creating code…',
+                    'Code created',
+                  )
                 }
               >
                 <span>Create an access code</span>
@@ -301,7 +370,7 @@ export default function AuthControl() {
               </button>
             </>
           )}
-          {user && codeQuery.isError && (
+          {user && !feedback && codeQuery.isError && (
             <p className="account-error" role="alert">
               {codeQuery.error.message}
             </p>

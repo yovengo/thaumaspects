@@ -33,7 +33,11 @@
   border-radius: 11px;
   color: var(--gold2);
   background: linear-gradient(145deg, #3d3841, #242026);
-  font-size: 24px;
+}
+.brand-mark svg {
+  display: block;
+  width: 21px;
+  height: 21px;
 }
 .brand-copy {
   display: grid;
@@ -1493,19 +1497,6 @@ footer a {
 .ess-catalog-header .ess-section-head {
   flex: 1;
 }
-.ess-catalog-toggle {
-  padding: 9px 11px;
-  border: 1px solid var(--gold);
-  border-radius: 7px;
-  color: var(--gold2);
-  background: var(--surface2);
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 800;
-}
-.ess-catalog-toggle:hover {
-  background: var(--surface3);
-}
 .ess-catalog:not(.is-open) > :not(.ess-catalog-header) {
   display: none;
 }
@@ -2417,7 +2408,6 @@ footer a {
   width: 38px;
   height: 38px;
   border-radius: 9px;
-  font-size: 21px;
 }
 .brand-copy {
   gap: 0;
@@ -2633,7 +2623,10 @@ footer a {
   .brand-mark {
     width: 34px;
     height: 34px;
-    font-size: 19px;
+  }
+  .brand-mark svg {
+    width: 19px;
+    height: 19px;
   }
   .site-version {
     padding: 5px 7px;
@@ -3283,8 +3276,81 @@ footer a {
   color: var(--text);
   background: #211c23;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.4);
+  transform-origin: top right;
+  animation: account-popover-enter 160ms ease-out both;
 }
-.account-popover strong {
+.account-popover.is-closing {
+  pointer-events: none;
+  animation: account-popover-exit 180ms ease-in both;
+}
+.account-feedback {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 108px;
+  text-align: center;
+}
+.account-feedback-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--surface2);
+}
+.account-feedback.is-success .account-feedback-icon {
+  border-color: #a48c62;
+  color: #241e22;
+  background: var(--gold2);
+  animation: account-feedback-check 220ms ease-out both;
+}
+.account-feedback-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.account-feedback strong {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.account-feedback.is-pending strong {
+  color: var(--muted);
+}
+@keyframes account-popover-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes account-popover-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+}
+@keyframes account-feedback-check {
+  from {
+    opacity: 0.65;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.account-popover > strong {
   display: block;
   margin-bottom: 12px;
   font-size: 13px;
@@ -4008,51 +4074,74 @@ footer a {
   padding: 0;
   overflow: hidden;
 }
-.ess-availability-panel .ess-source-manager-toggle {
+.ess-preferences-title {
+  display: block;
+  padding: 12px 13px 0;
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+.ess-availability-panel > .ess-preferences-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 11px 12px 12px;
+}
+.ess-availability-panel .ess-preference-choice {
   display: flex;
   align-items: center;
-  gap: 10px;
-  max-width: none;
+  gap: 8px;
   width: 100%;
-  min-height: 47px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 0;
-  color: var(--text);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.ess-source-manager-toggle:hover,
-.ess-source-manager-toggle[aria-expanded="true"] {
-  background: var(--surface3);
-}
-.ess-source-manager-toggle strong {
-  flex: 0 0 auto;
-  font-size: 12px;
-}
-.ess-source-manager-toggle > span {
   min-width: 0;
-  margin-left: auto;
+  min-height: 46px;
+  padding: 8px 11px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--text);
+  background: #241f28;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 150ms,
+    background 150ms,
+    transform 150ms;
+}
+.ess-availability-panel .ess-preference-choice:hover {
+  border-color: #9f865f;
+  background: #302935;
+}
+.ess-availability-panel .ess-preference-choice.is-active {
+  border-color: var(--gold);
+  background: #39303a;
+}
+.ess-preference-choice svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+}
+.ess-preference-choice.is-favorite svg {
+  color: var(--gold2);
+}
+.ess-preference-choice.is-unavailable svg {
+  color: #ba9dac;
+}
+.ess-preference-choice > span {
   overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ess-source-manager-toggle .field-chevron {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  color: var(--muted);
-  transition: transform 0.16s ease;
+.ess-preference-choice > strong {
+  margin-left: auto;
+  color: var(--gold2);
+  font-variant-numeric: tabular-nums;
 }
-.ess-source-manager-toggle[aria-expanded="true"] .field-chevron {
-  transform: rotate(180deg);
+.ess-preference-choice.is-unavailable > strong {
+  color: #c6afbd;
 }
 .ess-availability-panel > .ess-source-manager-body {
   display: block;
-  padding: 11px 12px 12px;
+  padding: 12px;
   border-top: 1px solid var(--edge);
 }
 .ess-source-manager-search {
@@ -4148,20 +4237,126 @@ footer a {
   font-size: 11px;
   font-weight: 700;
 }
+.ess-catalog {
+  scroll-margin-top: 18px;
+}
+.ess-catalog:not(.is-open) {
+  padding: 8px;
+  border-color: #7e6a53;
+  background: linear-gradient(115deg, #2c2530, #211e27 72%);
+  transition:
+    border-color 150ms,
+    background 150ms;
+}
+.ess-catalog:not(.is-open):hover {
+  border-color: var(--gold);
+}
+.ess-catalog-header {
+  display: block;
+}
+.ess-catalog-entry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms;
+}
+.ess-catalog-entry:hover {
+  background: rgba(232, 199, 139, 0.06);
+}
+.ess-catalog-entry:focus-visible,
+.ess-availability-panel .ess-preference-choice:focus-visible {
+  outline: 2px solid var(--gold2);
+  outline-offset: 2px;
+}
+.ess-catalog-entry-icon {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+  border: 1px solid #8c7456;
+  border-radius: 9px;
+  color: var(--gold2);
+  background: #3b3037;
+}
+.ess-catalog-entry-icon svg {
+  width: 23px;
+  height: 23px;
+}
+.ess-catalog-entry-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.ess-catalog-entry-copy strong {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+.ess-catalog-entry-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ess-catalog-entry-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--gold2);
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ess-catalog-entry-action .field-chevron {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg);
+  transition: transform 150ms;
+}
+.ess-catalog.is-open .ess-catalog-entry-action .field-chevron {
+  transform: rotate(180deg);
+}
 @media (max-width: 520px) {
-  .ess-availability-panel .ess-source-manager-toggle {
-    gap: 7px;
-    padding: 9px;
+  .ess-catalog:not(.is-open) {
+    padding: 5px;
   }
-  .ess-source-manager-toggle > span {
-    font-size: 10px;
+  .ess-catalog-entry {
+    gap: 10px;
+    padding: 8px 9px;
+  }
+  .ess-catalog-entry-action {
+    font-size: 11px;
+  }
+  .ess-availability-panel .ess-preference-choice {
+    gap: 6px;
+    padding: 7px 8px;
+    font-size: 11px;
   }
   .ess-picked-item .ess-picked-item-details {
     flex: 1 1 calc(100% - 60px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ess-source-manager-toggle .field-chevron {
+  .account-popover,
+  .account-popover.is-closing,
+  .account-feedback.is-success .account-feedback-icon {
+    animation: none;
+  }
+  .ess-availability-panel .ess-preference-choice {
+    transition: none;
+  }
+  .ess-catalog-entry,
+  .ess-catalog-entry-action .field-chevron,
+  .ess-catalog:not(.is-open) {
     transition: none;
   }
 }

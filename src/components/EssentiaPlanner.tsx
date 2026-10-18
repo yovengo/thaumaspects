@@ -112,6 +112,26 @@ function StarIcon({ filled }: { filled: boolean }) {
   )
 }
 
+function UnavailableIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m6 18 12-12" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function CatalogIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.3" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.3" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.3" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.3" />
+    </svg>
+  )
+}
+
 function SelectField({
   label,
   value,
@@ -485,6 +505,7 @@ export default function EssentiaPlanner() {
   const [visibleCount, setVisibleCount] = useState(30)
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [sourcesFilter, setSourcesFilter] = useState<'favorite' | 'excluded'>('favorite')
   const [sourcesQuery, setSourcesQuery] = useState('')
   const [sourcesVisibleCount, setSourcesVisibleCount] = useState(30)
   const [alternativesOpen, setAlternativesOpen] = useState(false)
@@ -544,10 +565,8 @@ export default function EssentiaPlanner() {
   const managedSources = useMemo(() => {
     if (!sourcesOpen) return []
     const normalized = sourcesQuery.trim().toLocaleLowerCase()
-    return [
-      ...availability.preferred.map((id) => ({ id, kind: 'favorite' as const })),
-      ...availability.excluded.map((id) => ({ id, kind: 'excluded' as const })),
-    ]
+    return (sourcesFilter === 'favorite' ? availability.preferred : availability.excluded)
+      .map((id) => ({ id, kind: sourcesFilter }))
       .map((source) => {
         const item = availabilityItems.get(source.id)
         return {
@@ -563,7 +582,7 @@ export default function EssentiaPlanner() {
             .toLocaleLowerCase()
             .includes(normalized),
       )
-  }, [sourcesOpen, sourcesQuery, availability, availabilityItems])
+  }, [sourcesOpen, sourcesFilter, sourcesQuery, availability, availabilityItems])
   const planRequest = JSON.stringify([
     required,
     availability.stage,
@@ -1327,33 +1346,66 @@ export default function EssentiaPlanner() {
         ref={catalogRef}
       >
         <div className="ess-catalog-header">
-          <div className="ess-section-head">
-            <h3>Catalog</h3>
-          </div>
           <button
-            className="ess-catalog-toggle"
+            className="ess-catalog-entry"
             type="button"
             aria-expanded={catalogOpen}
             onClick={() => setCatalogOpen((current) => !current)}
           >
-            {catalogOpen ? 'Hide catalog −' : 'Browse catalog +'}
+            <span className="ess-catalog-entry-icon">
+              <CatalogIcon />
+            </span>
+            <span className="ess-catalog-entry-copy">
+              <strong>Catalog</strong>
+              <small>
+                {catalog
+                  ? `${catalog.items.length.toLocaleString('en-US')} items`
+                  : loadError
+                    ? 'Unavailable'
+                    : 'Loading…'}
+              </small>
+            </span>
+            <span className="ess-catalog-entry-action">
+              {catalogOpen ? 'Close' : 'Browse items'}
+              <Chevron />
+            </span>
           </button>
         </div>
         {(availability.preferred.length > 0 || availability.excluded.length > 0) && (
           <div className="ess-availability-panel">
-            <button
-              className="ess-source-manager-toggle"
-              type="button"
-              aria-expanded={sourcesOpen}
-              onClick={() => setSourcesOpen((open) => !open)}
-            >
-              <strong>My sources</strong>
-              <span>
-                {availability.preferred.length} favorites · {availability.excluded.length}{' '}
-                unavailable
-              </span>
-              <Chevron />
-            </button>
+            <strong className="ess-preferences-title">Your items</strong>
+            <div className="ess-preferences-choices">
+              <button
+                className={`ess-preference-choice is-favorite${sourcesOpen && sourcesFilter === 'favorite' ? ' is-active' : ''}`}
+                type="button"
+                aria-expanded={sourcesOpen && sourcesFilter === 'favorite'}
+                onClick={() => {
+                  setSourcesOpen(sourcesFilter === 'favorite' ? !sourcesOpen : true)
+                  if (sourcesFilter !== 'favorite') setSourcesQuery('')
+                  setSourcesFilter('favorite')
+                  setSourcesVisibleCount(30)
+                }}
+              >
+                <StarIcon filled />
+                <span>Favorites</span>
+                <strong>{availability.preferred.length}</strong>
+              </button>
+              <button
+                className={`ess-preference-choice is-unavailable${sourcesOpen && sourcesFilter === 'excluded' ? ' is-active' : ''}`}
+                type="button"
+                aria-expanded={sourcesOpen && sourcesFilter === 'excluded'}
+                onClick={() => {
+                  setSourcesOpen(sourcesFilter === 'excluded' ? !sourcesOpen : true)
+                  if (sourcesFilter !== 'excluded') setSourcesQuery('')
+                  setSourcesFilter('excluded')
+                  setSourcesVisibleCount(30)
+                }}
+              >
+                <UnavailableIcon />
+                <span>Unavailable</span>
+                <strong>{availability.excluded.length}</strong>
+              </button>
+            </div>
             {sourcesOpen && (
               <div className="ess-source-manager-body">
                 <label className="ess-source-manager-search">
@@ -1365,7 +1417,7 @@ export default function EssentiaPlanner() {
                       setSourcesQuery(event.target.value)
                       setSourcesVisibleCount(30)
                     }}
-                    placeholder="Find a source"
+                    placeholder={`Search ${sourcesFilter === 'favorite' ? 'favorites' : 'unavailable items'}`}
                     aria-label="Search saved sources"
                   />
                 </label>
@@ -1381,7 +1433,9 @@ export default function EssentiaPlanner() {
                       )}
                       <div>
                         <strong title={name}>{name}</strong>
-                        <small>{kind === 'favorite' ? 'Favorite' : 'Unavailable'}</small>
+                        {item?.registryId && (
+                          <small title={item.registryId}>{item.registryId}</small>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1398,7 +1452,11 @@ export default function EssentiaPlanner() {
                   ))}
                 </div>
                 {managedSources.length === 0 && (
-                  <p className="ess-source-manager-empty">No saved sources found.</p>
+                  <p className="ess-source-manager-empty">
+                    {sourcesQuery
+                      ? 'No matching items.'
+                      : `No ${sourcesFilter === 'favorite' ? 'favorites' : 'unavailable items'} yet.`}
+                  </p>
                 )}
                 {sourcesVisibleCount < managedSources.length && (
                   <button
