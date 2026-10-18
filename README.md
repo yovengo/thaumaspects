@@ -16,6 +16,7 @@ The helper finds aspect connections for GTNH research. In addition to quick chai
 - An interactive, resizable hex map with drag-and-drop and obstacles.
 - Automatic route building and visualization on the map.
 - Essentia planner: enter one or more required aspects and get item quantities, totals, and alternative sets for the alchemical furnace.
+- Optional access-code sign-in and cloud favorites shared across devices.
 
 ## Essentia data
 
@@ -50,6 +51,31 @@ For a production build:
 ```bash
 pnpm build
 ```
+
+Code style is checked with Biome. Run `pnpm lint` to check the project or `pnpm format` to format source files and organize imports. Generated catalogs and game assets are excluded.
+
+## Cloud favorites (Supabase)
+
+Anonymous favorites continue to work in local storage. To enable accounts and cross-device sync:
+
+1. Create a Supabase project and run [`supabase/migrations/001_auth_favorites.sql`](supabase/migrations/001_auth_favorites.sql) in its SQL editor. If you ran an earlier version of that migration, also run [`supabase/migrations/002_recoverable_access_codes.sql`](supabase/migrations/002_recoverable_access_codes.sql). The tables live in a private schema and are accessed only by Next.js server routes.
+2. Set the server environment variables below locally in `.env.local` and in the deployment environment. Never prefix them with `NEXT_PUBLIC_`.
+3. Restart the server. Click the key icon in the header, then create an access code or enter an existing one. The account menu shows the code and lets you copy it while signed in. Existing accounts created before migration must confirm their code once to enable this view; signing in with the code also does this automatically.
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | Supabase **Session or Transaction pooler** PostgreSQL URI with a URL-encoded password and TLS verification (`sslmode=verify-full`). The Node `pg` pool uses one connection and unnamed parameterized queries. |
+| `DATABASE_CA_CERT_BASE64` | Base64-encoded contents of the **Server root certificate** downloaded from Supabase **Database Settings → SSL Configuration**. For example, `base64 -i /path/to/certificate.crt \| tr -d '\n'` on macOS. |
+| `AUTH_CODE_SECRET` | Stable, private, random secret of at least 32 characters, for example the output of `openssl rand -hex 32`. Changing it makes existing access codes unusable. |
+| `APP_ORIGIN` | Exact public origin, such as `https://thaumaspects.vercel.app`, with no trailing slash. Required in production for CSRF origin checks. Set to `http://localhost:3000` for local development when needed. |
+
+The sign-in code is the only account credential. Losing it **and** all signed-in sessions permanently loses access to that account. Server rate limits cover registration and login; no Supabase Auth account or additional service is needed. Account sessions last 30 days and can be used on several devices. The API stores an HMAC code digest plus an AES-GCM encrypted copy for signed-in recovery, and stores only session token hashes. Favorites are queried by the authenticated user's ID. Keep `AUTH_CODE_SECRET` stable and private: it is required both to validate and decrypt existing codes.
+
+The first sign-in merges anonymous local favorites with the cloud account once. Later visits use the cloud state, so an item removed on another device stays removed. Offline changes are queued locally and retried when connectivity returns. Availability exclusions and progression tier remain local settings.
+
+TanStack Query keeps session, access code, and favorite responses in the current browser tab. The code is fetched on demand once after a page load, or taken directly from a successful sign-in or registration response. Pending favorite edits are sent in batches; the returned list updates the cache without a follow-up GET. A visible tab refreshes remote favorites when its cached list is older than one minute.
+
+The GTNH item catalog is also cached for 30 minutes after leaving the planner, so switching between the map and planner does not download and prepare it again.
 
 ## Attribution and license
 

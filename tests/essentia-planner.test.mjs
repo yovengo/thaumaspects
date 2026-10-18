@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { buildPlans, key, prepareItems } from '../src/lib/essentiaPlanner.ts'
 
-const catalog = JSON.parse(readFileSync(new URL('../public/item-aspects-gtnh.json', import.meta.url), 'utf8'))
+const catalog = JSON.parse(
+  readFileSync(new URL('../public/item-aspects-gtnh.json', import.meta.url), 'utf8'),
+)
 const items = prepareItems(catalog.items)
 
 function checkCoverage(plans, required) {
@@ -19,7 +21,10 @@ test('planner combines sources for independent aspects and keeps alternatives va
   const two = { ignis: 16, potentia: 16 }
   const twoPlans = buildPlans(items, two, { stage: 'NONE' })
   checkCoverage(twoPlans, two)
-  assert.deepEqual(twoPlans[0].lines.map(({ item, count }) => [item.name, count]), [['Coal', 8]])
+  assert.deepEqual(
+    twoPlans[0].lines.map(({ item, count }) => [item.name, count]),
+    [['Coal', 8]],
+  )
 
   const three = { ...two, terra: 16 }
   const threePlans = buildPlans(items, three, { stage: 'NONE' })
@@ -58,6 +63,14 @@ test('practical multi-aspect mix survives beam limits and uses simple preferred 
   const plans = buildPlans(items, required, preferences)
   checkCoverage(plans, required)
   assert.equal(plans[0].title, 'Practical items')
-  assert.ok(plans[0].lines.some(({ item, count }) => item.registryId === 'minecraft:redstone' && count === 20))
-  assert.ok(plans[0].lines.every(({ item }) => !['minecraft:coal_block', 'minecraft:quartz'].includes(item.registryId)))
+  assert.ok(
+    plans[0].lines.some(
+      ({ item, count }) => item.registryId === 'minecraft:redstone' && count === 20,
+    ),
+  )
+  assert.ok(
+    plans[0].lines.every(
+      ({ item }) => !['minecraft:coal_block', 'minecraft:quartz'].includes(item.registryId),
+    ),
+  )
 })

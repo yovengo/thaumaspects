@@ -1,10 +1,12 @@
-import type { Combinations } from '../types/domain'
+import type { Combinations } from '@/types/domain'
 
 export function createAspectPathFinder(combinations: Combinations, enabled: Set<string>) {
   const graph: Record<string, string[]> = {}
   const connect = (a: string, b: string) => {
-    ;(graph[a] ??= []).push(b)
-    ;(graph[b] ??= []).push(a)
+    if (!graph[a]) graph[a] = []
+    if (!graph[b]) graph[b] = []
+    graph[a].push(b)
+    graph[b].push(a)
   }
 
   Object.entries(combinations).forEach(([compound, parts]) => {
@@ -38,7 +40,8 @@ export function createAspectPathFinder(combinations: Combinations, enabled: Set<
       for (const next of graph[node] ?? []) {
         queue.push({
           path: [...current.path, next],
-          cost: current.cost + (enabled.has(next) ? 1 : 100) + (current.path.includes(next) ? 8 : 0),
+          cost:
+            current.cost + (enabled.has(next) ? 1 : 100) + (current.path.includes(next) ? 8 : 0),
         })
       }
     }
@@ -48,6 +51,12 @@ export function createAspectPathFinder(combinations: Combinations, enabled: Set<
   }
 }
 
-export function findAspectPath(from: string, to: string, minSpaces: number, combinations: Combinations, enabled: Set<string>) {
+export function findAspectPath(
+  from: string,
+  to: string,
+  minSpaces: number,
+  combinations: Combinations,
+  enabled: Set<string>,
+) {
   return createAspectPathFinder(combinations, enabled)(from, to, minSpaces)
 }

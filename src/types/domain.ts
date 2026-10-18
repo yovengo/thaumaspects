@@ -13,8 +13,5 @@ export type AddonDefinition = {
 
 export type Catalog = {
   aspects: string[]
-  addonAspects: string[]
   combinations: Combinations
 }
-
-export type Mode = 'quick' | 'board'

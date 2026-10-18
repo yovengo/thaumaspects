@@ -1,21 +1,23 @@
 export const defaultBoardSize = 7
-export const minimumBoardSize = 3
+export const minimumBoardSize = 5
 export const maximumBoardSize = 15
 export const hexWidth = 61
 export const hexHeight = 53
-export const hexGap = 6
+const hexGap = 6
 export const hexColumnStep = 46 + hexGap
 export const hexRowStep = hexHeight + hexGap
 
 export const cellId = (row: number, column: number) => `${row}-${column}`
 export const parseCellId = (id: string) => id.split('-').map(Number) as [number, number]
 
-export function isBoardCell(row: number, column: number, boardSize: number) {
+function isBoardCell(row: number, column: number, boardSize: number) {
   const radius = Math.floor(boardSize / 2)
   const centerAxialRow = radius - Math.floor((radius - (radius & 1)) / 2)
   const axialColumn = column - radius
   const axialRow = row - Math.floor((column - (column & 1)) / 2) - centerAxialRow
-  return Math.max(Math.abs(axialColumn), Math.abs(axialRow), Math.abs(-axialColumn - axialRow)) <= radius
+  return (
+    Math.max(Math.abs(axialColumn), Math.abs(axialRow), Math.abs(-axialColumn - axialRow)) <= radius
+  )
 }
 
 export function getBoardCells(boardSize: number) {
@@ -27,15 +29,36 @@ export function getBoardCells(boardSize: number) {
 
 export function getBoardNeighbors(id: string, boardSize: number) {
   const [row, column] = parseCellId(id)
-  const directions = column % 2 === 0
-    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
-    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]
+  const directions =
+    column % 2 === 0
+      ? [
+          [-1, 0],
+          [1, 0],
+          [-1, -1],
+          [0, -1],
+          [-1, 1],
+          [0, 1],
+        ]
+      : [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [1, -1],
+          [0, 1],
+          [1, 1],
+        ]
 
-  return directions.map(([rowOffset, columnOffset]) => cellId(row + rowOffset, column + columnOffset))
+  return directions
+    .map(([rowOffset, columnOffset]) => cellId(row + rowOffset, column + columnOffset))
     .filter((next) => {
       const [nextRow, nextColumn] = parseCellId(next)
-      return nextRow >= 0 && nextRow < boardSize && nextColumn >= 0 && nextColumn < boardSize
-        && isBoardCell(nextRow, nextColumn, boardSize)
+      return (
+        nextRow >= 0 &&
+        nextRow < boardSize &&
+        nextColumn >= 0 &&
+        nextColumn < boardSize &&
+        isBoardCell(nextRow, nextColumn, boardSize)
+      )
     })
 }
 

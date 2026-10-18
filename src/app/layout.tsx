@@ -1,7 +1,10 @@
-import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
-import '../index.css'
-import '../App.css'
+import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
+import '@/index.css'
+import '@/App.css'
+import { ClientProviders } from '@/components/ClientProviders'
+import { SESSION_COOKIE } from '@/server/auth'
 
 export const metadata: Metadata = {
   title: 'Thaumaspects — GTNH Research & Essentia',
@@ -10,6 +13,14 @@ export const metadata: Metadata = {
   other: { google: 'notranslate' },
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" translate="no" className="notranslate" data-scroll-behavior="smooth"><body>{children}<Analytics /></body></html>
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const hasSessionCookie = (await cookies()).has(SESSION_COOKIE)
+  return (
+    <html lang="en" translate="no" className="notranslate" data-scroll-behavior="smooth">
+      <body>
+        <ClientProviders hasSessionCookie={hasSessionCookie}>{children}</ClientProviders>
+        <Analytics />
+      </body>
+    </html>
+  )
 }

@@ -1,0 +1,316 @@
+'use client'
+
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { api } from '@/lib/apiClient'
+import {
+  applyPendingFavorites,
+  favoriteChanges,
+  type PendingFavoriteChanges,
+  remainingFavoriteChanges,
+} from '@/lib/favoriteSync'
+import { codeKey, favoritesKey, sessionKey } from '@/lib/queryKeys'
+
+type User = { id: string }
+type Availability = { preferred: string[]; excluded: string[]; stage: string }
+type Pending = PendingFavoriteChanges
+type AuthContextValue = {
+  user: User | null
+  loading: boolean
+  showSignedInIcon: boolean
+  syncError: boolean
+  login: (code: string) => Promise<void>
+  register: () => Promise<string>
+  logout: () => Promise<void>
+  rotate: () => Promise<string>
+  favoritesChanged: (before: string[], after: string[]) => void
+}
+
+const Context = createContext<AuthContextValue | null>(null)
+const availabilityKey = 'thaumaspects:availability:v2'
+const availabilityEvent = 'thaumaspects:availability-changed'
+const anonymousKey = 'thaumaspects:anonymous-availability:v1'
+const anonymousAdditionsKey = 'thaumaspects:anonymous-added:v1'
+const accountKey = (id: string) => `thaumaspects:cloud:${id}:v1`
+const pendingKey = (id: string) => `thaumaspects:pending:${id}:v1`
+
+function readAvailability(): Availability {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(availabilityKey) || '{}',
+    ) as Partial<Availability>
+    return {
+      preferred: Array.isArray(parsed.preferred)
+        ? parsed.preferred.filter((item): item is string => typeof item === 'string')
+        : [],
+      excluded: Array.isArray(parsed.excluded)
+        ? parsed.excluded.filter((item): item is string => typeof item === 'string')
+        : [],
+      stage: typeof parsed.stage === 'string' ? parsed.stage : 'NONE',
+    }
+  } catch {
+    return { preferred: [], excluded: [], stage: 'NONE' }
+  }
+}
+
+function writeAvailability(preferred: string[]) {
+  const current = readAvailability()
+  if (
+    current.preferred.length === preferred.length &&
+    current.preferred.every((item, index) => item === preferred[index])
+  )
+    return
+  localStorage.setItem(availabilityKey, JSON.stringify({ ...current, preferred }))
+  window.dispatchEvent(new Event(availabilityEvent))
+}
+
+function readPending(id: string): Pending {
+  try {
+    const value = JSON.parse(localStorage.getItem(pendingKey(id)) || '{}') as Pending
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        (entry): entry is [string, 'add' | 'remove'] =>
+          (entry[1] === 'add' || entry[1] === 'remove') &&
+          entry[0].length > 0 &&
+          entry[0].length <= 2000,
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+export function AuthProvider({
+  children,
+  hasSessionCookie,
+}: {
+  children: ReactNode
+  hasSessionCookie: boolean
+}) {
+  const queryClient = useQueryClient()
+  const session = useQuery({
+    queryKey: sessionKey,
+    queryFn: () => api<{ user: User | null }>('/api/auth/me'),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnReconnect: false,
+  })
+  const user = session.data?.user ?? null
+  const loading = session.isPending
+  const showSignedInIcon = Boolean(user) || (loading && hasSessionCookie)
+  const [syncError, setSyncError] = useState(false)
+  const userRef = useRef<User | null>(null)
+  const drainingRef = useRef<string | null>(null)
+  const beforeAuthChangesRef = useRef<Pending>({})
+  const initialActivationRef = useRef(false)
+
+  const drain = useCallback(
+    async (id: string) => {
+      if (drainingRef.current === id || userRef.current?.id !== id) return
+      drainingRef.current = id
+      try {
+        let changed = false
+        while (userRef.current?.id === id) {
+          const sent = Object.fromEntries(Object.entries(readPending(id)).slice(0, 500)) as Pending
+          if (!Object.keys(sent).length) break
+          const remote = await api<{ items: string[] }>('/api/favorites', 'PATCH', {
+            changes: sent,
+          })
+          if (userRef.current?.id !== id) return
+          queryClient.setQueryData(favoritesKey(id), remote)
+          const pending = remainingFavoriteChanges(readPending(id), sent)
+          localStorage.setItem(pendingKey(id), JSON.stringify(pending))
+          writeAvailability(applyPendingFavorites(remote.items, pending))
+          changed = true
+        }
+        if (userRef.current?.id === id && !changed) {
+          const remote = await queryClient.fetchQuery({
+            queryKey: favoritesKey(id),
+            queryFn: () => api<{ items: string[] }>('/api/favorites'),
+            staleTime: 60_000,
+          })
+          if (userRef.current?.id === id)
+            writeAvailability(applyPendingFavorites(remote.items, readPending(id)))
+        }
+        if (userRef.current?.id === id) setSyncError(false)
+      } catch {
+        if (userRef.current?.id === id) setSyncError(true)
+      } finally {
+        if (drainingRef.current === id) drainingRef.current = null
+      }
+    },
+    [queryClient],
+  )
+
+  const syncAccount = useCallback(
+    async (id: string) => {
+      try {
+        if (!localStorage.getItem(accountKey(id))) {
+          const remote = await api<{ items: string[] }>('/api/favorites/sync', 'POST', {
+            items: readAvailability().preferred,
+          })
+          if (userRef.current?.id !== id) return
+          queryClient.setQueryData(favoritesKey(id), remote)
+          localStorage.setItem(accountKey(id), '1')
+          writeAvailability(applyPendingFavorites(remote.items, readPending(id)))
+        }
+        await drain(id)
+      } catch {
+        if (userRef.current?.id === id) setSyncError(true)
+      }
+    },
+    [drain, queryClient],
+  )
+
+  const activate = useCallback(
+    async (next: User, explicitLogin: boolean) => {
+      if (explicitLogin || !localStorage.getItem(accountKey(next.id))) {
+        if (!localStorage.getItem(anonymousKey))
+          localStorage.setItem(anonymousKey, JSON.stringify(readAvailability()))
+      }
+      userRef.current = next
+      if (explicitLogin) queryClient.setQueryData(sessionKey, { user: next })
+      const earlyChanges = beforeAuthChangesRef.current
+      beforeAuthChangesRef.current = {}
+      let anonymousAdded: string[] = []
+      try {
+        const stored: unknown = JSON.parse(localStorage.getItem(anonymousAdditionsKey) || '[]')
+        anonymousAdded = Array.isArray(stored)
+          ? stored.filter((item): item is string => typeof item === 'string')
+          : []
+      } catch {
+        /* ignore damaged local data */
+      }
+      if (Object.keys(earlyChanges).length || anonymousAdded.length) {
+        const additions = Object.fromEntries(anonymousAdded.map((item) => [item, 'add' as const]))
+        localStorage.setItem(
+          pendingKey(next.id),
+          JSON.stringify({ ...readPending(next.id), ...additions, ...earlyChanges }),
+        )
+      }
+      await syncAccount(next.id)
+      localStorage.removeItem(anonymousAdditionsKey)
+    },
+    [queryClient, syncAccount],
+  )
+
+  useEffect(() => {
+    if (initialActivationRef.current || session.isPending) return
+    let active = true
+    queueMicrotask(() => {
+      if (!active || initialActivationRef.current) return
+      initialActivationRef.current = true
+      if (session.data?.user) void activate(session.data.user, false)
+      else beforeAuthChangesRef.current = {}
+    })
+    return () => {
+      active = false
+    }
+  }, [activate, session.data, session.isPending])
+
+  useEffect(() => {
+    const retry = () => {
+      if (userRef.current) void syncAccount(userRef.current.id)
+    }
+    const visible = () => {
+      if (document.visibilityState === 'visible') retry()
+    }
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [syncAccount])
+
+  const login = async (code: string) => {
+    const result = await api<{ user: User }>('/api/auth/login', 'POST', { code })
+    const digits = code.replace(/\D/g, '')
+    queryClient.setQueryData(codeKey(result.user.id), {
+      code: `${digits.slice(0, 5)}-${digits.slice(5)}`,
+    })
+    await activate(result.user, true)
+  }
+  const register = async () => {
+    const result = await api<{ user: User; code: string }>('/api/auth/register', 'POST')
+    queryClient.setQueryData(codeKey(result.user.id), { code: result.code })
+    await activate(result.user, true)
+    return result.code
+  }
+  const logout = async () => {
+    await api('/api/auth/logout', 'POST')
+    userRef.current = null
+    queryClient.setQueryData(sessionKey, { user: null })
+    queryClient.removeQueries({ queryKey: ['auth', 'code'] })
+    queryClient.removeQueries({ queryKey: ['favorites'] })
+    setSyncError(false)
+    const anonymous = localStorage.getItem(anonymousKey)
+    if (anonymous) {
+      localStorage.setItem(availabilityKey, anonymous)
+      window.dispatchEvent(new Event(availabilityEvent))
+      localStorage.removeItem(anonymousKey)
+    } else {
+      writeAvailability([])
+    }
+  }
+  const rotate = async () => {
+    const result = await api<{ code: string }>('/api/auth/rotate-code', 'POST')
+    if (userRef.current) queryClient.setQueryData(codeKey(userRef.current.id), result)
+    return result.code
+  }
+  const favoritesChanged = (before: string[], after: string[]) => {
+    const changes = favoriteChanges(before, after)
+    if (!Object.keys(changes).length) return
+    const id = userRef.current?.id
+    if (!id) {
+      if (loading) beforeAuthChangesRef.current = { ...beforeAuthChangesRef.current, ...changes }
+      else {
+        let previous: string[] = []
+        try {
+          const stored: unknown = JSON.parse(localStorage.getItem(anonymousAdditionsKey) || '[]')
+          previous = Array.isArray(stored)
+            ? stored.filter((item): item is string => typeof item === 'string')
+            : []
+        } catch {
+          /* ignore damaged local data */
+        }
+        const next = new Set(previous)
+        for (const [item, action] of Object.entries(changes)) {
+          if (action === 'add') next.add(item)
+          else next.delete(item)
+        }
+        localStorage.setItem(anonymousAdditionsKey, JSON.stringify([...next]))
+      }
+      return
+    }
+    const pending = { ...readPending(id), ...changes }
+    localStorage.setItem(pendingKey(id), JSON.stringify(pending))
+    if (localStorage.getItem(accountKey(id))) void drain(id)
+  }
+
+  return (
+    <Context.Provider
+      value={{
+        user,
+        loading,
+        showSignedInIcon,
+        syncError: syncError || session.isError,
+        login,
+        register,
+        logout,
+        rotate,
+        favoritesChanged,
+      }}
+    >
+      {children}
+    </Context.Provider>
+  )
+}
+
+export function useAuth() {
+  const value = useContext(Context)
+  if (!value) throw new Error('AuthProvider missing')
+  return value
+}

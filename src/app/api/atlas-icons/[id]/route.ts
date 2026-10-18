@@ -8,7 +8,9 @@ const columns = 256
 const rows = 170
 const tileSize = 32
 const atlasPath = path.join(process.cwd(), 'public', 'gt-icons', 'atlas-2.7.4.webp')
-const atlasPixels = readFile(atlasPath).then((source) => sharp(source).raw().toBuffer({ resolveWithObject: true }))
+const atlasPixels = readFile(atlasPath).then((source) =>
+  sharp(source).raw().toBuffer({ resolveWithObject: true }),
+)
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -18,8 +20,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const { data, info } = await atlasPixels
-  const icon = await sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } })
-    .extract({ left: (index % columns) * tileSize, top: Math.floor(index / columns) * tileSize, width: tileSize, height: tileSize })
+  const icon = await sharp(data, {
+    raw: { width: info.width, height: info.height, channels: info.channels },
+  })
+    .extract({
+      left: (index % columns) * tileSize,
+      top: Math.floor(index / columns) * tileSize,
+      width: tileSize,
+      height: tileSize,
+    })
     .png()
     .toBuffer()
 

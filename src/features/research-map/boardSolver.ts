@@ -1,11 +1,17 @@
-import { createAspectPathFinder } from '../../lib/aspectGraph'
-import type { Catalog } from '../../types/domain'
+import { createAspectPathFinder } from '@/lib/aspectGraph'
+import type { Catalog } from '@/types/domain'
 import { boardDistance, getBoardNeighbors, routeTurns } from './boardGeometry'
 
 export type BoardSearchProgress = { source: string; target: string; path: string[] }
-export type BoardSearchObserver = (progress: BoardSearchProgress) => void
+type BoardSearchObserver = (progress: BoardSearchProgress) => void
 
-export function findShortestBoardRoute(start: string, finish: string, occupied: Set<string>, boardSize: number, onSearch?: BoardSearchObserver) {
+function findShortestBoardRoute(
+  start: string,
+  finish: string,
+  occupied: Set<string>,
+  boardSize: number,
+  onSearch?: BoardSearchObserver,
+) {
   const queue: string[][] = [[start]]
   const visited = new Set([start])
 
@@ -23,7 +29,15 @@ export function findShortestBoardRoute(start: string, finish: string, occupied: 
   return null
 }
 
-export function findBoardRouteCandidates(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number, limit = 32, onSearch?: BoardSearchObserver) {
+function findBoardRouteCandidates(
+  start: string,
+  finish: string,
+  length: number,
+  occupied: Set<string>,
+  boardSize: number,
+  limit = 32,
+  onSearch?: BoardSearchObserver,
+) {
   let attempts = 0
   const candidates: string[][] = []
 
@@ -54,10 +68,6 @@ export function findBoardRouteCandidates(start: string, finish: string, length: 
   return candidates.sort((a, b) => routeTurns(a) - routeTurns(b))
 }
 
-export function findBoardRoute(start: string, finish: string, length: number, occupied: Set<string>, boardSize: number) {
-  return findBoardRouteCandidates(start, finish, length, occupied, boardSize, 48)[0] ?? null
-}
-
 export type SolvedBoard = {
   board: Record<string, string>
   routes: string[][]
@@ -74,9 +84,13 @@ export function solveAllAnchors(
   onSearch?: BoardSearchObserver,
 ): SolvedBoard | { message: string } {
   const anchors = [...anchorCells].filter((id) => board[id] && !obstacles.has(id))
-  if (anchors.length < 2) return { message: 'Place at least two source aspects on the map before using auto-connect.' }
+  if (anchors.length < 2)
+    return { message: 'Place at least two source aspects on the map before using auto-connect.' }
 
-  const workingBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<string, string>
+  const workingBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<
+    string,
+    string
+  >
   const connected = new Set<string>([anchors[0]])
   const remaining = new Set(anchors.slice(1))
   const routes: string[][] = []
@@ -87,7 +101,10 @@ export function solveAllAnchors(
 
     for (const target of remaining) {
       for (const source of connected) {
-        const occupied = new Set([...Object.keys(workingBoard).filter((id) => id !== source && id !== target), ...obstacles])
+        const occupied = new Set([
+          ...Object.keys(workingBoard).filter((id) => id !== source && id !== target),
+          ...obstacles,
+        ])
         const shortestRoute = findShortestBoardRoute(source, target, occupied, boardSize, onSearch)
         if (!shortestRoute) continue
 
@@ -98,18 +115,32 @@ export function solveAllAnchors(
             Math.max(0, shortestRoute.length - 2 + extraSpaces),
           )
           if (!aspectPath) continue
-          const routeCandidates = findBoardRouteCandidates(source, target, aspectPath.length, occupied, boardSize, 12, onSearch)
+          const routeCandidates = findBoardRouteCandidates(
+            source,
+            target,
+            aspectPath.length,
+            occupied,
+            boardSize,
+            12,
+            onSearch,
+          )
 
           for (const route of routeCandidates) {
             const futureNetwork = new Set([...connected, ...route])
-            const occupiedAfterRoute = new Set([...occupied, ...route.filter((id) => id !== target)])
+            const occupiedAfterRoute = new Set([
+              ...occupied,
+              ...route.filter((id) => id !== target),
+            ])
             let futurePenalty = 0
 
             for (const futureTarget of remaining) {
               if (futureTarget === target) continue
-              const distanceToNetwork = Math.min(...[...futureNetwork].map((id) => boardDistance(id, futureTarget)))
-              const hasExit = getBoardNeighbors(futureTarget, boardSize)
-                .some((id) => !occupiedAfterRoute.has(id) || futureNetwork.has(id))
+              const distanceToNetwork = Math.min(
+                ...[...futureNetwork].map((id) => boardDistance(id, futureTarget)),
+              )
+              const hasExit = getBoardNeighbors(futureTarget, boardSize).some(
+                (id) => !occupiedAfterRoute.has(id) || futureNetwork.has(id),
+              )
               futurePenalty += distanceToNetwork * 3 + (hasExit ? 0 : 100000)
             }
 
@@ -120,7 +151,11 @@ export function solveAllAnchors(
       }
     }
 
-    if (!best) return { message: 'The source aspects cannot all be connected. Remove some obstacles or move the isolated aspects.' }
+    if (!best)
+      return {
+        message:
+          'The source aspects cannot all be connected. Remove some obstacles or move the isolated aspects.',
+      }
 
     best.route.forEach((id, index) => {
       workingBoard[id] = best.aspects[index]

@@ -1,5 +1,5 @@
-import type { Catalog } from '../../types/domain'
-import { solveAllAnchors, type BoardSearchProgress, type SolvedBoard } from './boardSolver'
+import type { Catalog } from '@/types/domain'
+import { type BoardSearchProgress, type SolvedBoard, solveAllAnchors } from './boardSolver'
 
 export type SolveRequest = {
   board: Record<string, string>
