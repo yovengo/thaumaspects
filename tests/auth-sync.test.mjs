@@ -14,6 +14,7 @@ import {
   normalizeCode,
   sessionHash,
 } from '../src/server/auth.ts'
+import { itemChangesFromBody } from '../src/server/favorites.ts'
 
 test('access codes have exactly ten digits and normalize both accepted forms', () => {
   for (let i = 0; i < 100; i++) {
@@ -67,4 +68,23 @@ test('a new favorite edit during sync remains queued', () => {
   const sent = { coal: 'add', quartz: 'remove' }
   const current = { coal: 'remove', quartz: 'remove', iron: 'add' }
   assert.deepEqual(remainingFavoriteChanges(current, sent), { coal: 'remove', iron: 'add' })
+})
+
+test('unavailable item edits use the same offline merge rules', () => {
+  const pending = favoriteChanges(['coal'], ['redstone'])
+  assert.deepEqual(pending, { coal: 'remove', redstone: 'add' })
+  assert.deepEqual(applyPendingFavorites(['coal', 'quartz'], pending), ['quartz', 'redstone'])
+  assert.deepEqual(remainingFavoriteChanges({ ...pending, coal: 'add' }, pending), {
+    coal: 'add',
+  })
+})
+
+test('batch item changes reject malformed keys and actions', () => {
+  assert.deepEqual(itemChangesFromBody({ coal: 'add', quartz: 'remove' }), [
+    ['coal', 'add'],
+    ['quartz', 'remove'],
+  ])
+  assert.equal(itemChangesFromBody({ coal: 'unknown' }), null)
+  assert.equal(itemChangesFromBody({ '': 'add' }), null)
+  assert.deepEqual(itemChangesFromBody(undefined), [])
 })

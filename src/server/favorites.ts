@@ -12,3 +12,17 @@ export function itemKeysFromBody(value: unknown): string[] | null {
   }
   return [...new Set(keys)]
 }
+
+export function itemChangesFromBody(value: unknown): [string, 'add' | 'remove'][] | null {
+  if (value === undefined) return []
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const entries = Object.entries(value)
+  if (
+    entries.length > 500 ||
+    entries.some(
+      ([key, action]) => !itemKeyFromBody(key) || (action !== 'add' && action !== 'remove'),
+    )
+  )
+    return null
+  return entries as [string, 'add' | 'remove'][]
+}

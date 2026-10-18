@@ -521,7 +521,7 @@ export default function EssentiaPlanner() {
   )
   const [volatileAvailability, setVolatileAvailability] = useState<Availability | null>(null)
   const availability = volatileAvailability ?? savedAvailability
-  const { favoritesChanged } = useAuth()
+  const { availabilityChanged } = useAuth()
   const resultRef = useRef<HTMLDivElement>(null)
   const sourceSearchRef = useRef<HTMLInputElement>(null)
   const catalogSearchRef = useRef<HTMLInputElement>(null)
@@ -531,7 +531,7 @@ export default function EssentiaPlanner() {
     const next = typeof update === 'function' ? update(availability) : update
     try {
       window.localStorage.setItem(availabilityStorageKey, JSON.stringify(next))
-      favoritesChanged(availability.preferred, next.preferred)
+      availabilityChanged(availability, next)
       setVolatileAvailability(null)
       window.dispatchEvent(new Event(availabilityChangedEvent))
     } catch {
