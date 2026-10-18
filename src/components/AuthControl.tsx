@@ -103,6 +103,8 @@ export default function AuthControl() {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [closing, setClosing] = useState(false)
+  const [iconOverride, setIconOverride] = useState<boolean | null>(null)
+  const showAccountIcon = iconOverride ?? showSignedInIcon
   const codeQuery = useQuery({
     queryKey: codeKey(user?.id ?? ''),
     queryFn: () => api<{ code: string | null }>('/api/auth/code'),
@@ -129,6 +131,7 @@ export default function AuthControl() {
     setBusy(false)
     setFeedback(null)
     setClosing(false)
+    setIconOverride(null)
     if (restoreFocus) triggerRef.current?.focus()
   }, [])
 
@@ -176,14 +179,17 @@ export default function AuthControl() {
     action: () => Promise<void>,
     pendingLabel: string,
     successLabel: string,
+    signedInAfterSuccess: boolean,
   ) => {
     const currentOperation = ++operation.current
     setBusy(true)
     setError('')
+    setIconOverride(showAccountIcon)
     setFeedback({ kind: 'pending', label: pendingLabel })
     try {
       await action()
       if (operation.current !== currentOperation) return
+      setIconOverride(signedInAfterSuccess)
       setFeedback({ kind: 'success', label: successLabel })
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       feedbackTimer.current = setTimeout(
@@ -199,6 +205,7 @@ export default function AuthControl() {
       )
     } catch (cause) {
       if (operation.current !== currentOperation) return
+      setIconOverride(null)
       setFeedback(null)
       setError(cause instanceof Error ? cause.message : 'Request failed.')
     } finally {
@@ -207,7 +214,7 @@ export default function AuthControl() {
   }
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    void authAction(() => login(code), 'Signing in…', 'Signed in')
+    void authAction(() => login(code), 'Signing in…', 'Signed in', true)
   }
   const confirm = (event: FormEvent) => {
     event.preventDefault()
@@ -224,11 +231,9 @@ export default function AuthControl() {
       .then(() => setCopied(true))
       .catch(() => setError('Copy failed. Select the code to copy it.'))
   }
-  const signingOut = feedback?.label === 'Signing out…' || feedback?.label === 'Signed out'
-  const showAccountIcon = showSignedInIcon || signingOut
   const accountLabel = feedback
     ? feedback.label
-    : showSignedInIcon
+    : showAccountIcon
       ? loading
         ? 'Account, checking session'
         : 'Account, signed in'
@@ -252,8 +257,12 @@ export default function AuthControl() {
         disabled={loading || busy}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        {showAccountIcon ? <AccountIcon /> : <KeyIcon />}
-        {syncError && user && <span className="account-sync-dot" aria-hidden="true" />}
+        <span className="account-trigger-symbol" key={showAccountIcon ? 'account' : 'key'}>
+          {showAccountIcon ? <AccountIcon /> : <KeyIcon />}
+        </span>
+        {syncError && user && feedback?.kind !== 'pending' && (
+          <span className="account-sync-dot" aria-hidden="true" />
+        )}
       </button>
       {open && (
         <div
@@ -323,7 +332,7 @@ export default function AuthControl() {
                 className="account-signout"
                 type="button"
                 disabled={busy}
-                onClick={() => void authAction(logout, 'Signing out…', 'Signed out')}
+                onClick={() => void authAction(logout, 'Signing out…', 'Signed out', false)}
               >
                 Sign out
               </button>
@@ -362,6 +371,7 @@ export default function AuthControl() {
                     },
                     'Creating code…',
                     'Code created',
+                    true,
                   )
                 }
               >

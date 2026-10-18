@@ -3681,6 +3681,23 @@ footer a {
   width: 21px;
   height: 21px;
 }
+.account-trigger-symbol {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  animation: account-icon-enter 180ms ease-out both;
+}
+@keyframes account-icon-enter {
+  from {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 .page-heading {
   justify-content: flex-start;
   gap: 17px;
@@ -4348,7 +4365,8 @@ footer a {
 @media (prefers-reduced-motion: reduce) {
   .account-popover,
   .account-popover.is-closing,
-  .account-feedback.is-success .account-feedback-icon {
+  .account-feedback.is-success .account-feedback-icon,
+  .account-trigger-symbol {
     animation: none;
   }
   .ess-availability-panel .ess-preference-choice {
