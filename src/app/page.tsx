@@ -1,5 +1,5 @@
-import App from '@/App'
+import ResearchMap from '@/features/research-map/ResearchMap'
 
 export default function ResearchMapPage() {
-  return <App page="board" />
+  return <ResearchMap />
 }

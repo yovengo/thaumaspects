@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Build a versioned furnace catalog from GTNH Oracle essentia recipes."""
-
 import argparse
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -46,7 +44,6 @@ def read_atlas_index(path):
 
 
 def read_legacy_aspects(path):
-    """Read exact item aspect recipes from a GTNH Calculator v3/v5 export."""
     data = gzip.open(path, 'rb').read()
     ints = memoryview(data).cast('i')
 
@@ -157,7 +154,6 @@ def main():
                 icon = {'kind': 'rendered', 'file': file_name(icon_path), 'quality': 'exact'}
                 remote_paths.add(icon_path)
             else:
-                # Do not pass off an unrelated texture as the exact item.
                 icon = None
             items.append({'name': source_item['displayName'], 'registryId': item_id,
                           'aspects': item_aspects, **({'icon': icon} if icon else {})})

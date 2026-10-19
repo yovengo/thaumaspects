@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Measure the visible content of GTNH's transparent rendered PNG icons."""
-
 import json
 import struct
 import zlib

@@ -5,6 +5,7 @@ import '@/index.css'
 import '@/App.css'
 import { ClientProviders } from '@/components/ClientProviders'
 import { SESSION_COOKIE } from '@/server/auth'
+import { SiteShell } from '@/shared/layout/SiteShell'
 
 export const metadata: Metadata = {
   title: 'Thaumaspects — GTNH Research & Essentia',
@@ -18,7 +19,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" translate="no" className="notranslate" data-scroll-behavior="smooth">
       <body>
-        <ClientProviders hasSessionCookie={hasSessionCookie}>{children}</ClientProviders>
+        <ClientProviders hasSessionCookie={hasSessionCookie}>
+          <SiteShell>{children}</SiteShell>
+        </ClientProviders>
         <Analytics />
       </body>
     </html>

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Estimate relative item effort from a versioned GTNH recipe graph.
-
-Scores are a generic ranking heuristic. They are not exact resource costs:
-world rarity, inventories and all progression gates are not in the oracle data.
-"""
-
 import argparse
 from collections import defaultdict
 import glob
@@ -65,7 +59,7 @@ def read_recipes(directory):
                     continue
                 amount = float(ingredient.get('amount', 1)) / (1000 if ingredient['kind'] == 'fluid' else 1)
                 if ingredient.get('consumed') is False:
-                    amount /= 8  # amortize a reusable crop seed over harvests
+                    amount /= 8
                 inputs.append((ingredient['id'], amount))
             if not inputs:
                 continue
@@ -80,9 +74,6 @@ def read_recipes(directory):
 
 def estimate_scores(usage, alternatives, recipes, produced, world_sources, stage):
     max_tier = TIERS.index(stage)
-    # A direct world source is approximated by how often the item occurs in
-    # the recipe index. Vanilla resources stay directly obtainable even when a
-    # machine recipe can also produce them.
     costs = {}
     for item_id, count in usage.items():
         base = 5 / math.sqrt(count + 1)
@@ -115,13 +106,9 @@ def estimate_scores(usage, alternatives, recipes, produced, world_sources, stage
             else:
                 for item_id, amount in outputs:
                     effective = max(0.001, amount)
-                    # Depth represents the number of dependent crafting steps.
-                    # Charge each produced unit for setup, so a complex chain
-                    # cannot appear cheaper merely because one recipe batches it.
                     score = total / effective + (0.1 if farming else 0.5 * (depth + 1))
                     if score + 1e-6 < costs.get(item_id, math.inf):
                         costs[item_id] = score
-                        # Harvested crops remain direct renewable sources.
                         depths[item_id] = 0 if farming else depth + 1
                         changed = True
         if not changed:

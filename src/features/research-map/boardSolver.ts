@@ -1,6 +1,6 @@
-import { createAspectPathFinder } from '@/lib/aspectGraph'
-import type { Catalog } from '@/types/domain'
 import { boardDistance, getBoardNeighbors, routeTurns } from './boardGeometry'
+import { createAspectPathFinder } from './model/aspectGraph'
+import type { Catalog } from './model/types'
 
 export type BoardSearchProgress = { source: string; target: string; path: string[] }
 type BoardSearchObserver = (progress: BoardSearchProgress) => void

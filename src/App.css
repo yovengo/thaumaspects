@@ -239,7 +239,6 @@ footer {
 footer a {
   color: var(--gold);
 }
-/* Quick Search */
 .quick-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
@@ -449,7 +448,6 @@ footer a {
   font-size: 13px;
   text-align: center;
 }
-/* Research map: flat-top hex geometry is intentionally identical to the previous layout. */
 .research-board {
   padding: 20px;
 }
@@ -695,7 +693,6 @@ footer a {
   justify-content: end;
   gap: 7px;
 }
-/* Aspect settings */
 .aspect-settings {
   margin-top: 14px;
   overflow: hidden;
@@ -826,7 +823,6 @@ footer a {
   font-size: 9px;
   font-style: normal;
 }
-/* Planner */
 .ess-page {
   display: grid;
   gap: 14px;
@@ -1958,7 +1954,6 @@ footer a {
     text-align: left;
   }
 }
-/* Keep narrow layouts inside the viewport. */
 .board-layout,
 .board-palette,
 .palette-list {
@@ -2015,7 +2010,6 @@ footer a {
   box-shadow: 0 0 0 2px rgba(216, 181, 120, 0.22);
 }
 
-/* Planner workspace: request, recommendation, and tools follow the furnace workflow. */
 .ess-page {
   gap: 18px;
 }
@@ -2396,7 +2390,6 @@ footer a {
   }
 }
 
-/* Keep the workspace visible above the fold on desktop. */
 .app-shell {
   padding-top: 12px;
 }
@@ -2445,7 +2438,6 @@ footer a {
   padding: 7px 11px;
 }
 
-/* A vertical recipe sits beside the furnace output. */
 .ess-page {
   gap: 13px;
 }
@@ -2666,7 +2658,6 @@ footer a {
   }
 }
 
-/* Planner refinements: aligned fields, readable search, and quiet optional settings. */
 .ess-picker-search input {
   color: var(--text);
 }
@@ -2760,7 +2751,6 @@ footer a {
   }
 }
 
-/* Rendered GTNH icons contain varying amounts of transparent padding. */
 .ess-rendered-frame {
   position: relative;
   display: block;
@@ -2773,7 +2763,6 @@ footer a {
   image-rendering: pixelated;
 }
 
-/* Keep the workspace focused on actions and results. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -2933,7 +2922,6 @@ footer a {
   }
 }
 
-/* Give each essentia balance row enough space to read at a glance. */
 .ess-result-analysis {
   padding-top: 16px;
 }
@@ -3192,7 +3180,6 @@ footer a {
   }
 }
 
-/* A target is one editable recipe line, with quiet controls inside it. */
 .primary-nav a {
   display: inline-flex;
   align-items: center;
@@ -3619,7 +3606,6 @@ footer a {
   }
 }
 
-/* Quiet tool navigation, with account and version treated as one utility group. */
 .site-header {
   position: relative;
   z-index: 30;
@@ -4434,7 +4420,6 @@ footer a {
   transform: rotate(180deg);
 }
 
-/* The empty target is the first action and occupies the same space as one editable row. */
 .ess-empty-target {
   display: flex;
   align-items: center;

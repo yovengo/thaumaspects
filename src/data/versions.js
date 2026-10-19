@@ -1,4 +1,3 @@
-// Thaumcraft 4.2.2 research graph used by GTNH.
 export const gtnhResearchDefinition = {
   base_aspects: ['air', 'earth', 'fire', 'water', 'order', 'entropy'],
   combinations: {

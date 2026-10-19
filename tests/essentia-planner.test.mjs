@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { buildPlans, key, prepareItems } from '../src/lib/essentiaPlanner.ts'
+import { buildPlans, key, prepareItems } from '../src/features/essentia/model/planner.ts'
 
 const catalog = JSON.parse(
   readFileSync(new URL('../public/item-aspects-gtnh.json', import.meta.url), 'utf8'),

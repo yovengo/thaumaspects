@@ -1,11 +1,13 @@
+'use client'
+
 import { useQuery } from '@tanstack/react-query'
 import Image from 'next/image'
 import type { KeyboardEvent } from 'react'
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useAuth } from '@/components/AuthProvider'
 import renderedIconBounds from '@/data/renderedIconBounds.json'
-import type { ItemAspect, Plan, PlanLine, Requirement } from '@/lib/essentiaPlanner'
-import { key as itemKey, planFromLines, prepareItems } from '@/lib/essentiaPlanner'
-import { useAuth } from './AuthProvider'
+import type { ItemAspect, Plan, PlanLine, Requirement } from './model/planner'
+import { key as itemKey, planFromLines, prepareItems } from './model/planner'
 
 type UnprofiledItem = { name: string; registryId: string }
 type Catalog = {
@@ -80,7 +82,7 @@ function getPlannerWorker(items: ItemAspect[]) {
   if (sharedWorker && sharedWorkerItems === items) return sharedWorker
   sharedWorker?.terminate()
   resetResultCacheFor(items)
-  const worker = new Worker(new URL('../workers/essentiaPlanner.worker.ts', import.meta.url), {
+  const worker = new Worker(new URL('./essentiaPlanner.worker.ts', import.meta.url), {
     type: 'module',
   })
   sharedWorker = worker
@@ -695,7 +697,7 @@ export default function EssentiaPlanner() {
     try {
       window.sessionStorage.setItem(plannerSessionKey, JSON.stringify(saved))
     } catch {
-      // The in-memory snapshot still preserves state during route changes.
+      return
     }
   }, [
     sessionReady,

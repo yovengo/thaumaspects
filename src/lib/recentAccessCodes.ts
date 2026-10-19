@@ -52,7 +52,7 @@ function writeRecentAccessCodes(entries: RecentAccessCode[]) {
   try {
     localStorage.setItem(storageKey, JSON.stringify(entries))
   } catch {
-    // Authentication still works when browser storage is unavailable.
+    return entries
   }
   return entries
 }
