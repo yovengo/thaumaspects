@@ -34,6 +34,50 @@ import {
 } from '@/lib/catalog'
 
 type Mode = 'quick' | 'board'
+type ResearchSession = {
+  enabled: string[]
+  activeAddons: string[]
+  from: string
+  to: string
+  minSpaces: number
+  result: string[] | null
+  searched: boolean
+  mode: Mode
+  board: Record<string, string>
+  anchorCells: string[]
+  boardRoutes: string[][]
+  boardMessage: string
+  obstacles: string[]
+  aspectsOpen: boolean
+  paletteQuery: string
+  pendingAspect: string | null
+  boardSize: number
+}
+
+const researchSessionKey = 'thaumaspects:research-session:v1'
+let researchSessionCache: ResearchSession | null = null
+
+function readResearchSession(): ResearchSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(researchSessionKey)
+    if (!raw) return null
+    const saved = JSON.parse(raw) as ResearchSession
+    if (
+      !Array.isArray(saved.enabled) ||
+      !Array.isArray(saved.activeAddons) ||
+      !Array.isArray(saved.anchorCells) ||
+      !Array.isArray(saved.boardRoutes) ||
+      !Array.isArray(saved.obstacles) ||
+      !saved.board ||
+      typeof saved.board !== 'object' ||
+      !Number.isInteger(saved.boardSize)
+    )
+      return null
+    return saved
+  } catch {
+    return null
+  }
+}
 
 const researchCatalog = getCatalog()
 
@@ -180,26 +224,42 @@ const routePoints = (route: string[]) =>
 
 function App({ page }: { page: 'board' | 'essentia' }) {
   const catalog = researchCatalog
-  const [enabled, setEnabled] = useState<Set<string>>(() => new Set(researchCatalog.aspects))
-  const [activeAddons, setActiveAddons] = useState<Set<string>>(
-    () => new Set(addonEntries.map(([id]) => id)),
+  const initialSession = useRef(
+    page === 'board' && typeof window !== 'undefined' ? researchSessionCache : null,
   )
-  const [from, setFrom] = useState('air')
-  const [to, setTo] = useState('air')
-  const [minSpaces, setMinSpaces] = useState(1)
-  const [result, setResult] = useState<string[] | null>(null)
-  const [searched, setSearched] = useState(false)
-  const [mode, setMode] = useState<Mode>('board')
-  const [board, setBoard] = useState<Record<string, string>>({})
-  const [anchorCells, setAnchorCells] = useState<Set<string>>(new Set())
-  const [boardRoutes, setBoardRoutes] = useState<string[][]>([])
-  const [boardMessage, setBoardMessage] = useState('')
-  const [obstacles, setObstacles] = useState<Set<string>>(new Set())
-  const [aspectsOpen, setAspectsOpen] = useState(false)
+  const [sessionReady, setSessionReady] = useState(
+    page !== 'board' || Boolean(initialSession.current),
+  )
+  const [enabled, setEnabled] = useState<Set<string>>(
+    () => new Set(initialSession.current?.enabled ?? researchCatalog.aspects),
+  )
+  const [activeAddons, setActiveAddons] = useState<Set<string>>(
+    () => new Set(initialSession.current?.activeAddons ?? addonEntries.map(([id]) => id)),
+  )
+  const [from, setFrom] = useState(initialSession.current?.from ?? 'air')
+  const [to, setTo] = useState(initialSession.current?.to ?? 'air')
+  const [minSpaces, setMinSpaces] = useState(initialSession.current?.minSpaces ?? 1)
+  const [result, setResult] = useState<string[] | null>(initialSession.current?.result ?? null)
+  const [searched, setSearched] = useState(initialSession.current?.searched ?? false)
+  const [mode, setMode] = useState<Mode>(initialSession.current?.mode ?? 'board')
+  const [board, setBoard] = useState<Record<string, string>>(initialSession.current?.board ?? {})
+  const [anchorCells, setAnchorCells] = useState<Set<string>>(
+    () => new Set(initialSession.current?.anchorCells ?? []),
+  )
+  const [boardRoutes, setBoardRoutes] = useState<string[][]>(
+    initialSession.current?.boardRoutes ?? [],
+  )
+  const [boardMessage, setBoardMessage] = useState(initialSession.current?.boardMessage ?? '')
+  const [obstacles, setObstacles] = useState<Set<string>>(
+    () => new Set(initialSession.current?.obstacles ?? []),
+  )
+  const [aspectsOpen, setAspectsOpen] = useState(initialSession.current?.aspectsOpen ?? false)
   const dragRef = useRef(false)
-  const [paletteQuery, setPaletteQuery] = useState('')
-  const [pendingAspect, setPendingAspect] = useState<string | null>(null)
-  const [boardSize, setBoardSize] = useState(defaultBoardSize)
+  const [paletteQuery, setPaletteQuery] = useState(initialSession.current?.paletteQuery ?? '')
+  const [pendingAspect, setPendingAspect] = useState<string | null>(
+    initialSession.current?.pendingAspect ?? null,
+  )
+  const [boardSize, setBoardSize] = useState(initialSession.current?.boardSize ?? defaultBoardSize)
   const [solvePhase, setSolvePhase] = useState<'idle' | 'searching' | 'revealing'>('idle')
   const [searchTrace, setSearchTrace] = useState<BoardSearchProgress | null>(null)
   const [revealCell, setRevealCell] = useState<string | null>(null)
@@ -208,6 +268,81 @@ function App({ page }: { page: 'board' | 'essentia' }) {
   const solveTokenRef = useRef(0)
   const previousViewRef = useRef<{ board: Record<string, string>; routes: string[][] } | null>(null)
   const finalBoardRef = useRef<{ result: SolvedBoard; anchorCount: number } | null>(null)
+
+  useEffect(() => {
+    if (page !== 'board' || sessionReady) return
+    const saved = readResearchSession()
+    if (saved) {
+      setEnabled(new Set(saved.enabled))
+      setActiveAddons(new Set(saved.activeAddons))
+      setFrom(saved.from)
+      setTo(saved.to)
+      setMinSpaces(saved.minSpaces)
+      setResult(saved.result)
+      setSearched(saved.searched)
+      setMode(saved.mode)
+      setBoard(saved.board)
+      setAnchorCells(new Set(saved.anchorCells))
+      setBoardRoutes(saved.boardRoutes)
+      setBoardMessage(saved.boardMessage)
+      setObstacles(new Set(saved.obstacles))
+      setAspectsOpen(saved.aspectsOpen)
+      setPaletteQuery(saved.paletteQuery)
+      setPendingAspect(saved.pendingAspect)
+      setBoardSize(saved.boardSize)
+    }
+    setSessionReady(true)
+  }, [page, sessionReady])
+
+  useEffect(() => {
+    if (page !== 'board' || !sessionReady || solvePhase !== 'idle') return
+    const saved: ResearchSession = {
+      enabled: [...enabled],
+      activeAddons: [...activeAddons],
+      from,
+      to,
+      minSpaces,
+      result,
+      searched,
+      mode,
+      board,
+      anchorCells: [...anchorCells],
+      boardRoutes,
+      boardMessage,
+      obstacles: [...obstacles],
+      aspectsOpen,
+      paletteQuery,
+      pendingAspect,
+      boardSize,
+    }
+    researchSessionCache = saved
+    try {
+      window.sessionStorage.setItem(researchSessionKey, JSON.stringify(saved))
+    } catch {
+      // The in-memory snapshot still preserves state during route changes.
+    }
+  }, [
+    page,
+    sessionReady,
+    solvePhase,
+    enabled,
+    activeAddons,
+    from,
+    to,
+    minSpaces,
+    result,
+    searched,
+    mode,
+    board,
+    anchorCells,
+    boardRoutes,
+    boardMessage,
+    obstacles,
+    aspectsOpen,
+    paletteQuery,
+    pendingAspect,
+    boardSize,
+  ])
 
   useEffect(
     () => () => {

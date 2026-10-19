@@ -20,14 +20,115 @@ type Row = { id: number; aspect: string; amount: string }
 type CatalogFilter = 'allSelected' | 'anySelected' | 'allItems'
 type CatalogSort = 'practical' | 'quantity' | 'name'
 type Availability = { preferred: string[]; excluded: string[]; stage: string }
+type PlannerSession = {
+  rows: Row[]
+  nextId: number
+  selectedId: string | null
+  customLines: PlanLine[]
+  catalogFilter: CatalogFilter
+  catalogSort: CatalogSort
+  query: string
+  sourceQuery: string
+  sourcePickerOpen: boolean
+  sourceVisibleCount: number
+  visibleCount: number
+  catalogOpen: boolean
+  sourcesOpen: boolean
+  sourcesFilter: 'favorite' | 'excluded'
+  sourcesQuery: string
+  sourcesVisibleCount: number
+  alternativesOpen: boolean
+  expandedItems: string[]
+}
 type PlanJob = {
   type: 'calculate'
   request: string
   required: Requirement
   preferences: Availability
 }
+type PlanResult = { request: string; plans: Plan[]; error?: boolean; partial?: boolean }
+type IndexResult = { request: string; indices: number[] }
+type WorkerResult =
+  | ({ type: 'calculate' } & PlanResult)
+  | ({ type: 'catalog' | 'sources' } & IndexResult)
+
+const resultCacheLimit = 8
+let cachedItems: ItemAspect[] | null = null
+const cachedPlans = new Map<string, PlanResult>()
+const cachedCatalogResults = new Map<string, IndexResult>()
+const cachedSourceResults = new Map<string, IndexResult>()
+let sharedWorker: Worker | null = null
+let sharedWorkerItems: ItemAspect[] | null = null
+const workerListeners = new Set<(result: WorkerResult) => void>()
+const workerErrorListeners = new Set<() => void>()
+
+function resetResultCacheFor(items: ItemAspect[]) {
+  if (cachedItems === items) return
+  cachedItems = items
+  cachedPlans.clear()
+  cachedCatalogResults.clear()
+  cachedSourceResults.clear()
+}
+
+function cacheResult<T>(cache: Map<string, T>, request: string, result: T) {
+  cache.delete(request)
+  cache.set(request, result)
+  if (cache.size > resultCacheLimit) cache.delete(cache.keys().next().value!)
+}
+
+function getPlannerWorker(items: ItemAspect[]) {
+  if (sharedWorker && sharedWorkerItems === items) return sharedWorker
+  sharedWorker?.terminate()
+  resetResultCacheFor(items)
+  const worker = new Worker(new URL('../workers/essentiaPlanner.worker.ts', import.meta.url), {
+    type: 'module',
+  })
+  sharedWorker = worker
+  sharedWorkerItems = items
+  worker.onmessage = (event: MessageEvent<WorkerResult>) => {
+    if (sharedWorker !== worker) return
+    const result = event.data
+    if (result.type === 'calculate' && !result.partial)
+      cacheResult(cachedPlans, result.request, result)
+    else if (result.type === 'catalog') cacheResult(cachedCatalogResults, result.request, result)
+    else if (result.type === 'sources') cacheResult(cachedSourceResults, result.request, result)
+    for (const listener of workerListeners) listener(result)
+  }
+  worker.onerror = () => {
+    if (sharedWorker !== worker) return
+    worker.terminate()
+    sharedWorker = null
+    sharedWorkerItems = null
+    for (const listener of workerErrorListeners) listener()
+  }
+  worker.postMessage({ type: 'init', items })
+  return worker
+}
+
 const availabilityStorageKey = 'thaumaspects:availability:v2'
 const availabilityChangedEvent = 'thaumaspects:availability-changed'
+const plannerSessionKey = 'thaumaspects:planner-session:v1'
+let plannerSessionCache: PlannerSession | null = null
+
+function readPlannerSession(): PlannerSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(plannerSessionKey)
+    if (!raw) return null
+    const saved = JSON.parse(raw) as PlannerSession
+    if (
+      !Array.isArray(saved.rows) ||
+      !saved.rows.every((row) => Number.isInteger(row.id) && typeof row.aspect === 'string') ||
+      !Array.isArray(saved.customLines) ||
+      !saved.customLines.every((line) => line?.item?.aspects && line.count > 0) ||
+      !Array.isArray(saved.expandedItems) ||
+      !Number.isInteger(saved.nextId)
+    )
+      return null
+    return saved
+  } catch {
+    return null
+  }
+}
 const defaultAvailability: Availability = { preferred: [], excluded: [], stage: 'NONE' }
 const stages = [
   ['NONE', 'No machines'],
@@ -461,6 +562,8 @@ function countForItem(item: ItemAspect, required: Requirement) {
 }
 
 export default function EssentiaPlanner() {
+  const initialSession = useRef(typeof window !== 'undefined' ? plannerSessionCache : null)
+  const [sessionReady, setSessionReady] = useState(Boolean(initialSession.current))
   const catalogQuery = useQuery({
     queryKey: ['catalog', 'gtnh-2.9.0-beta-2'],
     queryFn: async ({ signal }): Promise<Catalog> => {
@@ -475,18 +578,9 @@ export default function EssentiaPlanner() {
   })
   const catalog = catalogQuery.data ?? null
   const loadError = catalogQuery.isError
-  const [planResult, setPlanResult] = useState<{
-    request: string
-    plans: Plan[]
-    error?: boolean
-    partial?: boolean
-  } | null>(null)
-  const [catalogResult, setCatalogResult] = useState<{ request: string; indices: number[] } | null>(
-    null,
-  )
-  const [sourceResult, setSourceResult] = useState<{ request: string; indices: number[] } | null>(
-    null,
-  )
+  const [latestPlanResult, setPlanResult] = useState<PlanResult | null>(null)
+  const [latestCatalogResult, setCatalogResult] = useState<IndexResult | null>(null)
+  const [latestSourceResult, setSourceResult] = useState<IndexResult | null>(null)
   const [workerFailed, setWorkerFailed] = useState(false)
   const plannerWorker = useRef<Worker | null>(null)
   const activePlanJob = useRef<string | null>(null)
@@ -494,24 +588,44 @@ export default function EssentiaPlanner() {
   const latestPlanRequest = useRef('')
   const latestCatalogRequest = useRef('')
   const latestSourceRequest = useRef('')
-  const [rows, setRows] = useState<Row[]>([])
-  const [nextId, setNextId] = useState(1)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [customLines, setCustomLines] = useState<PlanLine[]>([])
-  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('anySelected')
-  const [catalogSort, setCatalogSort] = useState<CatalogSort>('practical')
-  const [query, setQuery] = useState('')
-  const [sourceQuery, setSourceQuery] = useState('')
-  const [sourcePickerOpen, setSourcePickerOpen] = useState(false)
-  const [sourceVisibleCount, setSourceVisibleCount] = useState(12)
-  const [visibleCount, setVisibleCount] = useState(30)
-  const [catalogOpen, setCatalogOpen] = useState(false)
-  const [sourcesOpen, setSourcesOpen] = useState(false)
-  const [sourcesFilter, setSourcesFilter] = useState<'favorite' | 'excluded'>('favorite')
-  const [sourcesQuery, setSourcesQuery] = useState('')
-  const [sourcesVisibleCount, setSourcesVisibleCount] = useState(30)
-  const [alternativesOpen, setAlternativesOpen] = useState(false)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set())
+  const [rows, setRows] = useState<Row[]>(initialSession.current?.rows ?? [])
+  const [nextId, setNextId] = useState(initialSession.current?.nextId ?? 1)
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSession.current?.selectedId ?? null,
+  )
+  const [customLines, setCustomLines] = useState<PlanLine[]>(
+    initialSession.current?.customLines ?? [],
+  )
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>(
+    initialSession.current?.catalogFilter ?? 'anySelected',
+  )
+  const [catalogSort, setCatalogSort] = useState<CatalogSort>(
+    initialSession.current?.catalogSort ?? 'practical',
+  )
+  const [query, setQuery] = useState(initialSession.current?.query ?? '')
+  const [sourceQuery, setSourceQuery] = useState(initialSession.current?.sourceQuery ?? '')
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(
+    initialSession.current?.sourcePickerOpen ?? false,
+  )
+  const [sourceVisibleCount, setSourceVisibleCount] = useState(
+    initialSession.current?.sourceVisibleCount ?? 12,
+  )
+  const [visibleCount, setVisibleCount] = useState(initialSession.current?.visibleCount ?? 30)
+  const [catalogOpen, setCatalogOpen] = useState(initialSession.current?.catalogOpen ?? false)
+  const [sourcesOpen, setSourcesOpen] = useState(initialSession.current?.sourcesOpen ?? false)
+  const [sourcesFilter, setSourcesFilter] = useState<'favorite' | 'excluded'>(
+    initialSession.current?.sourcesFilter ?? 'favorite',
+  )
+  const [sourcesQuery, setSourcesQuery] = useState(initialSession.current?.sourcesQuery ?? '')
+  const [sourcesVisibleCount, setSourcesVisibleCount] = useState(
+    initialSession.current?.sourcesVisibleCount ?? 30,
+  )
+  const [alternativesOpen, setAlternativesOpen] = useState(
+    initialSession.current?.alternativesOpen ?? false,
+  )
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(
+    () => new Set(initialSession.current?.expandedItems ?? []),
+  )
   const storedAvailability = useSyncExternalStore(
     subscribeAvailability,
     availabilitySnapshot,
@@ -528,6 +642,82 @@ export default function EssentiaPlanner() {
   const sourceSearchRef = useRef<HTMLInputElement>(null)
   const catalogSearchRef = useRef<HTMLInputElement>(null)
   const catalogRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (sessionReady) return
+    const saved = readPlannerSession()
+    if (saved) {
+      setRows(saved.rows)
+      setNextId(saved.nextId)
+      setSelectedId(saved.selectedId)
+      setCustomLines(saved.customLines)
+      setCatalogFilter(saved.catalogFilter)
+      setCatalogSort(saved.catalogSort)
+      setQuery(saved.query)
+      setSourceQuery(saved.sourceQuery)
+      setSourcePickerOpen(saved.sourcePickerOpen)
+      setSourceVisibleCount(saved.sourceVisibleCount)
+      setVisibleCount(saved.visibleCount)
+      setCatalogOpen(saved.catalogOpen)
+      setSourcesOpen(saved.sourcesOpen)
+      setSourcesFilter(saved.sourcesFilter)
+      setSourcesQuery(saved.sourcesQuery)
+      setSourcesVisibleCount(saved.sourcesVisibleCount)
+      setAlternativesOpen(saved.alternativesOpen)
+      setExpandedItems(new Set(saved.expandedItems))
+    }
+    setSessionReady(true)
+  }, [sessionReady])
+
+  useEffect(() => {
+    if (!sessionReady) return
+    const saved: PlannerSession = {
+      rows,
+      nextId,
+      selectedId,
+      customLines,
+      catalogFilter,
+      catalogSort,
+      query,
+      sourceQuery,
+      sourcePickerOpen,
+      sourceVisibleCount,
+      visibleCount,
+      catalogOpen,
+      sourcesOpen,
+      sourcesFilter,
+      sourcesQuery,
+      sourcesVisibleCount,
+      alternativesOpen,
+      expandedItems: [...expandedItems],
+    }
+    plannerSessionCache = saved
+    try {
+      window.sessionStorage.setItem(plannerSessionKey, JSON.stringify(saved))
+    } catch {
+      // The in-memory snapshot still preserves state during route changes.
+    }
+  }, [
+    sessionReady,
+    rows,
+    nextId,
+    selectedId,
+    customLines,
+    catalogFilter,
+    catalogSort,
+    query,
+    sourceQuery,
+    sourcePickerOpen,
+    sourceVisibleCount,
+    visibleCount,
+    catalogOpen,
+    sourcesOpen,
+    sourcesFilter,
+    sourcesQuery,
+    sourcesVisibleCount,
+    alternativesOpen,
+    expandedItems,
+  ])
 
   const setAvailability = (update: Availability | ((current: Availability) => Availability)) => {
     const next = typeof update === 'function' ? update(availability) : update
@@ -592,22 +782,16 @@ export default function EssentiaPlanner() {
     availability.preferred,
     availability.excluded,
   ])
+  const planResult =
+    (catalog && cachedItems === catalog.items && cachedPlans.get(planRequest)) || latestPlanResult
   useEffect(() => {
     latestPlanRequest.current = planRequest
   }, [planRequest])
   useEffect(() => {
     if (!catalog) return
-    const worker = new Worker(new URL('../workers/essentiaPlanner.worker.ts', import.meta.url), {
-      type: 'module',
-    })
+    const worker = getPlannerWorker(catalog.items)
     plannerWorker.current = worker
-    worker.onmessage = (
-      event: MessageEvent<
-        | { type: 'calculate'; request: string; plans: Plan[]; error?: boolean; partial?: boolean }
-        | { type: 'catalog' | 'sources'; request: string; indices: number[] }
-      >,
-    ) => {
-      const result = event.data
+    const onResult = (result: WorkerResult) => {
       if (result.type === 'calculate') {
         if (result.request === latestPlanRequest.current) {
           if (result.partial) {
@@ -617,6 +801,7 @@ export default function EssentiaPlanner() {
           setPlanResult(result)
         }
         if (result.partial) return
+        if (activePlanJob.current && activePlanJob.current !== result.request) return
         activePlanJob.current = null
         const next = pendingPlanJob.current
         if (next && next.request !== result.request) {
@@ -629,17 +814,23 @@ export default function EssentiaPlanner() {
       else if (result.type === 'sources' && result.request === latestSourceRequest.current)
         setSourceResult(result)
     }
-    worker.onerror = () => setWorkerFailed(true)
-    worker.postMessage({ type: 'init', items: catalog.items })
+    const onError = () => setWorkerFailed(true)
+    workerListeners.add(onResult)
+    workerErrorListeners.add(onError)
     return () => {
+      workerListeners.delete(onResult)
+      workerErrorListeners.delete(onError)
       plannerWorker.current = null
       activePlanJob.current = null
       pendingPlanJob.current = null
-      worker.terminate()
     }
   }, [catalog])
   useEffect(() => {
     if (!catalog || requestedTotal <= 0) {
+      pendingPlanJob.current = null
+      return
+    }
+    if (cachedItems === catalog.items && cachedPlans.has(planRequest)) {
       pendingPlanJob.current = null
       return
     }
@@ -675,6 +866,12 @@ export default function EssentiaPlanner() {
     availability,
   ])
   const sourceRequest = JSON.stringify([sourceQuery, requestedAspects, availability])
+  const catalogResult =
+    (catalog && cachedItems === catalog.items && cachedCatalogResults.get(catalogRequest)) ||
+    latestCatalogResult
+  const sourceResult =
+    (catalog && cachedItems === catalog.items && cachedSourceResults.get(sourceRequest)) ||
+    latestSourceResult
   useEffect(() => {
     latestCatalogRequest.current = catalogRequest
   }, [catalogRequest])
@@ -683,6 +880,7 @@ export default function EssentiaPlanner() {
   }, [sourceRequest])
   useEffect(() => {
     if (!catalog || !catalogOpen) return
+    if (cachedItems === catalog.items && cachedCatalogResults.has(catalogRequest)) return
     const timer = window.setTimeout(
       () =>
         plannerWorker.current?.postMessage({
@@ -709,6 +907,7 @@ export default function EssentiaPlanner() {
   ])
   useEffect(() => {
     if (!catalog || !sourcePickerOpen || requestedAspects.length === 0) return
+    if (cachedItems === catalog.items && cachedSourceResults.has(sourceRequest)) return
     const timer = window.setTimeout(
       () =>
         plannerWorker.current?.postMessage({
