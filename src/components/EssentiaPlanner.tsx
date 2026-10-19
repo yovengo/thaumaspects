@@ -75,7 +75,8 @@ function subscribeAvailability(onChange: () => void) {
 
 const displayItemName = (name: string) => name.replace(/§[0-9a-fk-or]/gi, '')
 const aspectWord = (count: number) => (count === 1 ? 'aspect' : 'aspects')
-const aspectLabel = (aspect: string) => aspect.replace(/^./, (letter) => letter.toUpperCase())
+const aspectLabel = (aspect: string) =>
+  aspect ? aspect.replace(/^./, (letter) => letter.toUpperCase()) : 'Aspect'
 const itemWord = (count: number) => (count === 1 ? 'item' : 'items')
 const scrollBehavior = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
@@ -347,7 +348,7 @@ function AspectPicker({
   excluded: Set<string>
   onChange: (value: string) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(!value)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -398,13 +399,17 @@ function AspectPicker({
       <button
         className="ess-picker-trigger"
         type="button"
-        aria-label={`Choose aspect, currently ${aspectLabel(value)}`}
+        aria-label={value ? `Choose aspect, currently ${aspectLabel(value)}` : 'Choose aspect'}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <AspectIcon name={value} />
-        <span>{aspectLabel(value)}</span>
+        {value ? (
+          <AspectIcon name={value} />
+        ) : (
+          <span className="ess-picker-placeholder-icon">+</span>
+        )}
+        <span>{value ? aspectLabel(value) : 'Choose aspect'}</span>
         <Chevron />
       </button>
       {open && (
@@ -489,11 +494,8 @@ export default function EssentiaPlanner() {
   const latestPlanRequest = useRef('')
   const latestCatalogRequest = useRef('')
   const latestSourceRequest = useRef('')
-  const [rows, setRows] = useState<Row[]>([
-    { id: 1, aspect: 'ignis', amount: '16' },
-    { id: 2, aspect: 'potentia', amount: '16' },
-  ])
-  const [nextId, setNextId] = useState(3)
+  const [rows, setRows] = useState<Row[]>([])
+  const [nextId, setNextId] = useState(1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [customLines, setCustomLines] = useState<PlanLine[]>([])
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('anySelected')
@@ -550,6 +552,7 @@ export default function EssentiaPlanner() {
   )
   const requestedAspects = useMemo(() => Object.keys(required), [required])
   const requestedTotal = Object.values(required).reduce((sum, amount) => sum + amount, 0)
+  const activeCatalogFilter = requestedAspects.length === 0 ? 'allItems' : catalogFilter
   const preferences = useMemo(
     () => ({
       preferred: new Set(availability.preferred),
@@ -664,7 +667,13 @@ export default function EssentiaPlanner() {
   )
   const refining = planResult?.request === planRequest && planResult.partial
   const plans = requestedTotal <= 0 || workerFailed ? [] : (planResult?.plans ?? [])
-  const catalogRequest = JSON.stringify([query, catalogFilter, catalogSort, required, availability])
+  const catalogRequest = JSON.stringify([
+    query,
+    activeCatalogFilter,
+    catalogSort,
+    required,
+    availability,
+  ])
   const sourceRequest = JSON.stringify([sourceQuery, requestedAspects, availability])
   useEffect(() => {
     latestCatalogRequest.current = catalogRequest
@@ -681,7 +690,7 @@ export default function EssentiaPlanner() {
           request: catalogRequest,
           required,
           query,
-          filter: catalogFilter,
+          filter: activeCatalogFilter,
           sort: catalogSort,
           preferences: availability,
         }),
@@ -694,7 +703,7 @@ export default function EssentiaPlanner() {
     catalogRequest,
     required,
     query,
-    catalogFilter,
+    activeCatalogFilter,
     catalogSort,
     availability,
   ])
@@ -715,9 +724,11 @@ export default function EssentiaPlanner() {
   }, [catalog, sourcePickerOpen, sourceRequest, sourceQuery, requestedAspects, availability])
   const customPlan = useMemo(() => planFromLines(customLines, required), [customLines, required])
   const selected =
-    selectedId === 'custom' && customLines.length
-      ? customPlan
-      : (plans.find((plan) => plan.id === selectedId) ?? plans[0])
+    requestedTotal <= 0
+      ? undefined
+      : selectedId === 'custom' && customLines.length
+        ? customPlan
+        : (plans.find((plan) => plan.id === selectedId) ?? plans[0])
   const resultRequired: Requirement =
     calculating && selectedId !== 'custom' && planResult?.plans.length
       ? JSON.parse(planResult.request)[0]
@@ -820,10 +831,16 @@ export default function EssentiaPlanner() {
       amount: String(Math.max(0, Math.min(1000, (Number(row.amount) || 0) + direction))),
     })
   const addRow = () => {
-    const aspect = availableAspects.find((candidate) => !usedAspects.has(candidate))
-    if (!aspect) return
-    setRows((previous) => [...previous, { id: nextId, aspect, amount: '1' }])
+    if (rows.some((row) => !row.aspect) || rows.length >= availableAspects.length) return
+    setRows((previous) => [...previous, { id: nextId, aspect: '', amount: '1' }])
     setNextId((value) => value + 1)
+  }
+  const removeRow = (id: number) => {
+    setRows((previous) => previous.filter((row) => row.id !== id))
+    if (rows.length === 1) {
+      setSelectedId(null)
+      setCustomLines([])
+    }
   }
   const chooseItem = (item: ItemAspect) => {
     const coversAll = requestedAspects.every((aspect) => (item.aspects[aspect] ?? 0) > 0)
@@ -902,6 +919,14 @@ export default function EssentiaPlanner() {
           <div className="ess-compose">
             <div className="ess-compose-aspects">
               <div className="ess-rows">
+                {rows.length === 0 && (
+                  <button className="ess-empty-target" type="button" onClick={addRow}>
+                    <span className="ess-empty-target-plus" aria-hidden="true">
+                      +
+                    </span>
+                    <span>Add aspect</span>
+                  </button>
+                )}
                 {rows.map((row) => (
                   <div className="ess-row" key={row.id}>
                     <div className="ess-aspect-field">
@@ -961,12 +986,9 @@ export default function EssentiaPlanner() {
                     <button
                       className="ess-remove"
                       type="button"
-                      disabled={rows.length === 1}
                       aria-label={`Remove ${aspectLabel(row.aspect)}`}
                       title={`Remove ${aspectLabel(row.aspect)}`}
-                      onClick={() =>
-                        setRows((previous) => previous.filter((entry) => entry.id !== row.id))
-                      }
+                      onClick={() => removeRow(row.id)}
                     >
                       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                         <path
@@ -981,14 +1003,18 @@ export default function EssentiaPlanner() {
                   </div>
                 ))}
               </div>
-              <button
-                className="ess-add"
-                type="button"
-                disabled={rows.length >= availableAspects.length}
-                onClick={addRow}
-              >
-                <span aria-hidden="true">＋</span> Add aspect
-              </button>
+              {rows.length > 0 && (
+                <button
+                  className="ess-add"
+                  type="button"
+                  disabled={
+                    rows.some((row) => !row.aspect) || rows.length >= availableAspects.length
+                  }
+                  onClick={addRow}
+                >
+                  <span aria-hidden="true">＋</span> Add aspect
+                </button>
+              )}
             </div>
             <details className="ess-advanced">
               <summary>
@@ -1018,7 +1044,7 @@ export default function EssentiaPlanner() {
         >
           <div className="ess-section-head">
             <h3>Furnace</h3>
-            {selectedId === 'custom' && (
+            {selected && selectedId === 'custom' && (
               <button className="ess-reset-plan" type="button" onClick={() => setSelectedId(null)}>
                 Restore recommendation
               </button>
@@ -1029,15 +1055,24 @@ export default function EssentiaPlanner() {
               {refining ? 'Refining…' : 'Updating…'}
             </span>
           )}
-          {!catalog && !loadError && <div className="ess-state">Loading item catalog…</div>}
+          {!catalog && !loadError && requestedAspects.length > 0 && (
+            <div className="ess-state">Loading item catalog…</div>
+          )}
           {loadError && (
             <div className="ess-state">Could not load the catalog. Please refresh the page.</div>
           )}
           {workerFailed && (
             <div className="ess-state">Calculation unavailable. Please refresh the page.</div>
           )}
-          {catalog && requestedAspects.length === 0 && (
-            <div className="ess-state">Enter an amount for at least one aspect.</div>
+          {!loadError && !workerFailed && requestedAspects.length === 0 && (
+            <div className="ess-result-empty" role="status">
+              <div className="ess-result-empty-slots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <span>Awaiting aspects</span>
+            </div>
           )}
           {catalog &&
             requestedAspects.length > 0 &&
@@ -1519,7 +1554,8 @@ export default function EssentiaPlanner() {
         <fieldset className="ess-filter-tabs" aria-label="Item filter">
           <button
             type="button"
-            className={catalogFilter === 'allSelected' ? 'is-active' : ''}
+            className={activeCatalogFilter === 'allSelected' ? 'is-active' : ''}
+            disabled={requestedAspects.length === 0}
             onClick={() => {
               setCatalogFilter('allSelected')
               setVisibleCount(30)
@@ -1529,7 +1565,8 @@ export default function EssentiaPlanner() {
           </button>
           <button
             type="button"
-            className={catalogFilter === 'anySelected' ? 'is-active' : ''}
+            className={activeCatalogFilter === 'anySelected' ? 'is-active' : ''}
+            disabled={requestedAspects.length === 0}
             onClick={() => {
               setCatalogFilter('anySelected')
               setVisibleCount(30)
@@ -1539,7 +1576,7 @@ export default function EssentiaPlanner() {
           </button>
           <button
             type="button"
-            className={catalogFilter === 'allItems' ? 'is-active' : ''}
+            className={activeCatalogFilter === 'allItems' ? 'is-active' : ''}
             onClick={() => {
               setCatalogFilter('allItems')
               setVisibleCount(30)

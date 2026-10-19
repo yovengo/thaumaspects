@@ -4433,6 +4433,93 @@ footer a {
 .ess-catalog.is-open .ess-catalog-entry-action .field-chevron {
   transform: rotate(180deg);
 }
+
+/* The empty target is the first action and occupies the same space as one editable row. */
+.ess-empty-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 106px;
+  padding: 12px;
+  border: 1px dashed #655769;
+  border-radius: 11px;
+  background: #211c24;
+  color: var(--gold2);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+.ess-empty-target:hover {
+  border-color: var(--gold);
+  background: #29232c;
+}
+.ess-empty-target:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+.ess-empty-target-plus {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #887253;
+  border-radius: 7px;
+  background: #302a2c;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+}
+.ess-result-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 310px;
+  margin-top: 15px;
+  color: var(--faint);
+  font-size: 12px;
+}
+.ess-result-empty-slots {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.ess-result-empty-slots span {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #554b57;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #19161c, #29232c);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.22);
+}
+.ess-result-empty-slots span:nth-child(2) {
+  border-color: #7a674f;
+}
+.ess-result-empty-slots span:first-child,
+.ess-result-empty-slots span:last-child {
+  opacity: 0.48;
+}
+.ess-picker-placeholder-icon {
+  display: grid;
+  flex: 0 0 25px;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  color: var(--gold);
+  font-size: 18px;
+}
+.ess-filter-tabs button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
 @media (max-width: 520px) {
   .ess-catalog:not(.is-open) {
     padding: 5px;
@@ -4465,7 +4552,8 @@ footer a {
   }
   .ess-catalog-entry,
   .ess-catalog-entry-action .field-chevron,
-  .ess-catalog:not(.is-open) {
+  .ess-catalog:not(.is-open),
+  .ess-empty-target {
     transition: none;
   }
 }
