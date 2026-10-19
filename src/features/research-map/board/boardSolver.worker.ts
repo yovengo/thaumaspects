@@ -1,5 +1,9 @@
-import { type BoardSearchProgress, type SolvedBoard, solveAllAnchors } from './boardSolver'
-import type { Catalog } from './model/types'
+import {
+  type BoardSearchProgress,
+  type SolvedBoard,
+  solveAllAnchors,
+} from '@/features/research-map/board/boardSolver'
+import type { Catalog } from '@/features/research-map/model/types'
 
 export type SolveRequest = {
   board: Record<string, string>

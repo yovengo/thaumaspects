@@ -1,7 +1,11 @@
 import { addonDictionary } from '@/data/addons.js'
 import { translate } from '@/data/aspects.js'
 import { gtnhResearchDefinition } from '@/data/versions.js'
-import type { AddonDefinition, Catalog, VersionDefinition } from './types'
+import type {
+  AddonDefinition,
+  Catalog,
+  VersionDefinition,
+} from '@/features/research-map/model/types'
 
 const aspectNames = translate as Record<string, string>
 const researchDefinition = gtnhResearchDefinition as unknown as VersionDefinition

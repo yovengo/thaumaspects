@@ -1,6 +1,10 @@
-import { boardDistance, getBoardNeighbors, routeTurns } from './boardGeometry'
-import { createAspectPathFinder } from './model/aspectGraph'
-import type { Catalog } from './model/types'
+import {
+  boardDistance,
+  getBoardNeighbors,
+  routeTurns,
+} from '@/features/research-map/board/boardGeometry'
+import { createAspectPathFinder } from '@/features/research-map/model/aspectGraph'
+import type { Catalog } from '@/features/research-map/model/types'
 
 export type BoardSearchProgress = { source: string; target: string; path: string[] }
 type BoardSearchObserver = (progress: BoardSearchProgress) => void

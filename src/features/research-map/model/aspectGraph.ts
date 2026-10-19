@@ -1,4 +1,4 @@
-import type { Combinations } from './types'
+import type { Combinations } from '@/features/research-map/model/types'
 
 export function createAspectPathFinder(combinations: Combinations, enabled: Set<string>) {
   const graph: Record<string, string[]> = {}
