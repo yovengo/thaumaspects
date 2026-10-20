@@ -6,7 +6,7 @@ import {
   parseRecentAccessCodes,
   readRecentAccessCodes,
   rememberRecentAccessCode,
-} from '../src/lib/recentAccessCodes.ts'
+} from '../src/features/auth/recentAccessCodes.ts'
 
 test('recent access codes keep three unique accounts in most recent order', () => {
   let entries = []

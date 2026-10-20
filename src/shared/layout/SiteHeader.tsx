@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import AuthControl from '@/components/AuthControl'
+import AuthControl from '@/features/auth/AuthControl'
 
 export function SiteHeader() {
   const pathname = usePathname()

@@ -1,5 +1,5 @@
 import 'server-only'
-import { Pool, type QueryResultRow } from 'pg'
+import { Pool, type PoolClient, type QueryResultRow } from 'pg'
 
 let pool: Pool | undefined
 
@@ -32,4 +32,19 @@ export async function query<T extends QueryResultRow>(
 ): Promise<T[]> {
   const result = await database().query<T>(sql, params)
   return result.rows
+}
+
+export async function transaction<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await database().connect()
+  try {
+    await client.query('BEGIN')
+    const result = await run(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }

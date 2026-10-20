@@ -1,13 +1,12 @@
 'use client'
 
 import { useMemo, useState, useSyncExternalStore } from 'react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { availabilityEvent, availabilityKey } from '@/features/auth/availabilityStorage'
 import { stages } from '@/features/essentia/availability/stages'
 import { type ItemAspect, key as itemKey } from '@/features/essentia/model/planner'
 import type { Availability } from '@/features/essentia/model/types'
 
-const availabilityStorageKey = 'thaumaspects:availability:v2'
-const availabilityChangedEvent = 'thaumaspects:availability-changed'
 const defaultAvailability: Availability = { preferred: [], excluded: [], stage: 'NONE' }
 
 function parseAvailability(raw: string): Availability {
@@ -29,7 +28,7 @@ function parseAvailability(raw: string): Availability {
 
 function availabilitySnapshot() {
   try {
-    return window.localStorage.getItem(availabilityStorageKey) ?? ''
+    return window.localStorage.getItem(availabilityKey) ?? ''
   } catch {
     return ''
   }
@@ -37,10 +36,10 @@ function availabilitySnapshot() {
 
 function subscribeAvailability(onChange: () => void) {
   window.addEventListener('storage', onChange)
-  window.addEventListener(availabilityChangedEvent, onChange)
+  window.addEventListener(availabilityEvent, onChange)
   return () => {
     window.removeEventListener('storage', onChange)
-    window.removeEventListener(availabilityChangedEvent, onChange)
+    window.removeEventListener(availabilityEvent, onChange)
   }
 }
 
@@ -54,10 +53,10 @@ export function useItemAvailability() {
   const setAvailability = (update: Availability | ((current: Availability) => Availability)) => {
     const next = typeof update === 'function' ? update(availability) : update
     try {
-      window.localStorage.setItem(availabilityStorageKey, JSON.stringify(next))
+      window.localStorage.setItem(availabilityKey, JSON.stringify(next))
       availabilityChanged(availability, next)
       setVolatile(null)
-      window.dispatchEvent(new Event(availabilityChangedEvent))
+      window.dispatchEvent(new Event(availabilityEvent))
     } catch {
       setVolatile(next)
     }

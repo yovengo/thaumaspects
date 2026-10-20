@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { AuthProvider } from './AuthProvider'
+import { AuthProvider } from '@/features/auth/AuthProvider'
 
 let browserClient: QueryClient | undefined
 

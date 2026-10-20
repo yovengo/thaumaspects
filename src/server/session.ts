@@ -8,8 +8,8 @@ import {
   SESSION_AGE_SECONDS,
   SESSION_COOKIE,
   sessionHash,
-} from './auth'
-import { database, query } from './db'
+} from '@/server/auth'
+import { query, transaction } from '@/server/db'
 
 export function setSessionCookie(response: NextResponse, token: string) {
   response.cookies.set(SESSION_COOKIE, token, {
@@ -25,18 +25,13 @@ export async function openSessionForCode(
   code: string,
 ): Promise<{ userId: string; token: string } | null> {
   const token = createSessionToken()
-  const client = await database().connect()
-  try {
-    await client.query('BEGIN')
+  return transaction(async (client) => {
     const users = await client.query<{ id: string; code_encrypted: string | null }>(
       'SELECT id,code_encrypted FROM private.app_users WHERE code_hash=$1 FOR UPDATE',
       [codeHash(code)],
     )
     const user = users.rows[0]
-    if (!user) {
-      await client.query('ROLLBACK')
-      return null
-    }
+    if (!user) return null
     if (!user.code_encrypted) {
       await client.query('UPDATE private.app_users SET code_encrypted=$1 WHERE id=$2', [
         encryptCode(`${code.slice(0, 5)}-${code.slice(5)}`, user.id),
@@ -48,31 +43,20 @@ export async function openSessionForCode(
       VALUES ($1,$2,now()+interval '30 days')`,
       [user.id, sessionHash(token)],
     )
-    await client.query('COMMIT')
     return { userId: user.id, token }
-  } catch (error) {
-    await client.query('ROLLBACK')
-    throw error
-  } finally {
-    client.release()
-  }
+  })
 }
 
 export async function createAccount(): Promise<{ userId: string; code: string; token: string }> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateCode()
-    const client = await database().connect()
-    try {
-      await client.query('BEGIN')
+    const created = await transaction(async (client) => {
       const users = await client.query<{ id: string }>(
         `INSERT INTO private.app_users (code_hash) VALUES ($1)
         ON CONFLICT (code_hash) DO NOTHING RETURNING id`,
         [codeHash(normalizeCode(code)!)],
       )
-      if (!users.rows[0]) {
-        await client.query('ROLLBACK')
-        continue
-      }
+      if (!users.rows[0]) return null
       await client.query('UPDATE private.app_users SET code_encrypted=$1 WHERE id=$2', [
         encryptCode(code, users.rows[0].id),
         users.rows[0].id,
@@ -83,14 +67,9 @@ export async function createAccount(): Promise<{ userId: string; code: string; t
         VALUES ($1,$2,now()+interval '30 days')`,
         [users.rows[0].id, sessionHash(token)],
       )
-      await client.query('COMMIT')
       return { userId: users.rows[0].id, code, token }
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    })
+    if (created) return created
   }
   throw new Error('Unable to generate unique code')
 }

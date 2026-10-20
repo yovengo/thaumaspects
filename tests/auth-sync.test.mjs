@@ -4,7 +4,7 @@ import {
   applyPendingFavorites,
   favoriteChanges,
   remainingFavoriteChanges,
-} from '../src/lib/favoriteSync.ts'
+} from '../src/features/auth/favoriteSync.ts'
 import {
   codeHash,
   createSessionToken,
@@ -14,7 +14,7 @@ import {
   normalizeCode,
   sessionHash,
 } from '../src/server/auth.ts'
-import { itemChangesFromBody } from '../src/server/favorites.ts'
+import { itemChangesFromBody, partitionItemChanges } from '../src/server/favoriteInput.ts'
 
 test('access codes have exactly ten digits and normalize both accepted forms', () => {
   for (let i = 0; i < 100; i++) {
@@ -87,4 +87,13 @@ test('batch item changes reject malformed keys and actions', () => {
   assert.equal(itemChangesFromBody({ coal: 'unknown' }), null)
   assert.equal(itemChangesFromBody({ '': 'add' }), null)
   assert.deepEqual(itemChangesFromBody(undefined), [])
+})
+
+test('unavailable wins when the same item is added to both lists', () => {
+  assert.deepEqual(partitionItemChanges([['coal', 'add']], [['coal', 'add']]), {
+    favoriteAdd: [],
+    favoriteRemove: ['coal'],
+    unavailableAdd: ['coal'],
+    unavailableRemove: ['coal'],
+  })
 })

@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { type NextRequest, NextResponse } from 'next/server'
-import { rateKey, SESSION_COOKIE, sessionHash } from './auth'
-import { query } from './db'
+import { rateKey, SESSION_COOKIE, sessionHash } from '@/server/auth'
+import { query } from '@/server/db'
 
 type User = { id: string }
 
