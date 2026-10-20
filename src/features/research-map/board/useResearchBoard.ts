@@ -83,15 +83,7 @@ export function useResearchBoard(
       enabled.has(aspect) &&
       `${label(aspect)} ${aspect}`.toLocaleLowerCase().includes(paletteQuery.toLocaleLowerCase()),
   )
-  const boardRouteOrder = useMemo(() => {
-    const order = new Map<string, number>()
-    for (const route of boardRoutes) {
-      for (const id of route) {
-        if (!order.has(id)) order.set(id, order.size + 1)
-      }
-    }
-    return order
-  }, [boardRoutes])
+  const boardRouteCells = useMemo(() => new Set(boardRoutes.flat()), [boardRoutes])
 
   const changeBoardSize = (nextSize: number) => {
     setBoardSize(nextSize)
@@ -150,7 +142,7 @@ export function useResearchBoard(
     searchCells,
     revealCell,
     paletteAspects,
-    boardRouteOrder,
+    boardRouteCells,
     boardCanvasHeight,
     boardMapHeight: Math.max(420, Math.ceil(boardCanvasHeight + 38)),
     restoreResearchBoard,

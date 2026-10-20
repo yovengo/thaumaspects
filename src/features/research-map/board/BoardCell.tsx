@@ -19,7 +19,7 @@ export function BoardCell({
     pendingAspect,
     dragRef,
     board,
-    boardRouteOrder,
+    boardRouteCells,
     obstacles,
     searchCells,
     anchorCells,
@@ -32,7 +32,6 @@ export function BoardCell({
   } = controller
   const id = cellId(row, column)
   const aspect = board[id]
-  const routeNumber = boardRouteOrder.get(id)
   const blocked = obstacles.has(id)
 
   const activateCell = () => {
@@ -68,7 +67,7 @@ export function BoardCell({
           dragRef.current = false
         }, 0)
       }
-      className={`board-cell ${aspect ? 'has-aspect' : ''} ${anchorCells.has(id) ? 'is-anchor' : ''} ${blocked ? 'is-blocked' : ''} ${routeNumber !== undefined ? 'is-route' : ''} ${searchCells.has(id) ? 'is-search-path' : ''} ${searchTrace?.source === id || searchTrace?.target === id ? 'is-search-endpoint' : ''} ${revealCell === id ? 'is-reveal-new' : ''}`}
+      className={`board-cell ${aspect ? 'has-aspect' : ''} ${anchorCells.has(id) ? 'is-anchor' : ''} ${blocked ? 'is-blocked' : ''} ${boardRouteCells.has(id) ? 'is-route' : ''} ${searchCells.has(id) ? 'is-search-path' : ''} ${searchTrace?.source === id || searchTrace?.target === id ? 'is-search-endpoint' : ''} ${revealCell === id ? 'is-reveal-new' : ''}`}
       onDragOver={(event) => {
         if (!blocked && solvePhase === 'idle') event.preventDefault()
       }}
@@ -102,7 +101,6 @@ export function BoardCell({
       ) : (
         aspect && (
           <>
-            {routeNumber !== undefined && <span className="cell-order">{routeNumber}</span>}
             <AspectIcon aspect={aspect} />
             <b>{label(aspect)}</b>
             <small>{aspect}</small>
