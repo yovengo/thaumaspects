@@ -6,8 +6,6 @@ Website: [thaumaspects.vercel.app](https://thaumaspects.vercel.app/)
 
 The helper finds aspect connections for GTNH research. In addition to quick chain searching, it includes an interactive research map where you can drag aspects, place obstacles, and automatically build routes.
 
-> **Technical note:** the project was developed iteratively, with priority given to validating the interface and research-map mechanics. As the feature set stabilizes, the application structure will be refined and parts of the implementation modularized.
-
 ## Features
 
 - GTNH-focused research map using Thaumcraft aspect relationships.
