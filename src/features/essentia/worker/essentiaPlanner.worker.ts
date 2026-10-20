@@ -1,5 +1,5 @@
-import type { ItemAspect, Plan, Requirement } from './model/planner'
-import { buildPlans, itemEffort, itemSimplicity, key } from './model/planner'
+import type { ItemAspect, Plan, Requirement } from '@/features/essentia/model/planner'
+import { buildPlans, itemEffort, itemSimplicity, key } from '@/features/essentia/model/planner'
 
 type Calculation =
   | { type: 'init'; items: ItemAspect[] }
