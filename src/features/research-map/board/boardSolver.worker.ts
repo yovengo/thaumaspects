@@ -1,6 +1,6 @@
 import {
   type BoardSearchProgress,
-  type SolvedBoard,
+  type BoardSolveResult,
   solveAllAnchors,
 } from '@/features/research-map/board/boardSolver'
 import type { Catalog } from '@/features/research-map/model/types'
@@ -16,7 +16,7 @@ export type SolveRequest = {
 
 export type SolveResponse =
   | { type: 'search'; progress: BoardSearchProgress }
-  | { type: 'complete'; result: SolvedBoard | { message: string } }
+  | { type: 'complete'; result: BoardSolveResult }
   | { type: 'error' }
 
 self.onmessage = (event: MessageEvent<SolveRequest>) => {

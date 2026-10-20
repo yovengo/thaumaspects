@@ -20,7 +20,6 @@ type BoardSolverInput = {
   boardSize: number
   catalog: Catalog
   enabled: Set<string>
-  setBoardMessage: Dispatch<SetStateAction<string>>
 }
 
 export function useBoardSolver({
@@ -33,7 +32,6 @@ export function useBoardSolver({
   boardSize,
   catalog,
   enabled,
-  setBoardMessage,
 }: BoardSolverInput) {
   const [solvePhase, setSolvePhase] = useState<'idle' | 'searching' | 'revealing'>('idle')
   const [searchTrace, setSearchTrace] = useState<BoardSearchProgress | null>(null)
@@ -42,7 +40,7 @@ export function useBoardSolver({
   const revealFrameRef = useRef<number | null>(null)
   const solveTokenRef = useRef(0)
   const previousViewRef = useRef<{ board: Record<string, string>; routes: string[][] } | null>(null)
-  const finalBoardRef = useRef<{ result: SolvedBoard; anchorCount: number } | null>(null)
+  const finalBoardRef = useRef<SolvedBoard | null>(null)
 
   useEffect(
     () => () => {
@@ -60,12 +58,11 @@ export function useBoardSolver({
     revealFrameRef.current = null
     finalBoardRef.current = null
     previousViewRef.current = null
-    setBoard(final.result.board)
-    setBoardRoutes(final.result.routes)
+    setBoard(final.board)
+    setBoardRoutes(final.routes)
     setSearchTrace(null)
     setRevealCell(null)
     setSolvePhase('idle')
-    setBoardMessage(`${final.anchorCount} aspects connected.`)
   }
 
   const cancelSolve = () => {
@@ -83,7 +80,6 @@ export function useBoardSolver({
     setSearchTrace(null)
     setRevealCell(null)
     setSolvePhase('idle')
-    setBoardMessage('Search canceled.')
   }
 
   const startReveal = (solved: SolvedBoard, anchors: string[], token: number) => {
@@ -97,7 +93,7 @@ export function useBoardSolver({
         }
       }
     }
-    finalBoardRef.current = { result: solved, anchorCount: anchors.length }
+    finalBoardRef.current = solved
     setSearchTrace(null)
 
     if (steps.length === 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -106,7 +102,6 @@ export function useBoardSolver({
     }
 
     setSolvePhase('revealing')
-    setBoardMessage('Filling map…')
     const stepDuration = Math.min(75, 900 / steps.length)
     const started = performance.now()
     let visibleCount = 0
@@ -142,10 +137,7 @@ export function useBoardSolver({
   const solveEntireMap = () => {
     if (solvePhase !== 'idle') return
     const anchors = [...anchorCells].filter((id) => board[id] && !obstacles.has(id))
-    if (anchors.length < 2) {
-      setBoardMessage('Place two aspects first.')
-      return
-    }
+    if (anchors.length < 2) return
 
     const token = ++solveTokenRef.current
     const initialBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<
@@ -157,7 +149,6 @@ export function useBoardSolver({
     setBoardRoutes([])
     setSearchTrace(null)
     setSolvePhase('searching')
-    setBoardMessage('Searching paths…')
 
     let settled = false
     const receiveResult = (result: ReturnType<typeof solveAllAnchors>) => {
@@ -175,7 +166,6 @@ export function useBoardSolver({
         previousViewRef.current = null
         setSearchTrace(null)
         setSolvePhase('idle')
-        setBoardMessage(result.message)
       }
     }
 

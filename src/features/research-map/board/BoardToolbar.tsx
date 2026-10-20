@@ -9,7 +9,6 @@ export function BoardToolbar({ controller }: { controller: ResearchBoardControll
     solvePhase,
     boardSize,
     changeBoardSize,
-    boardMessage,
     cancelSolve,
     finishReveal,
     solveEntireMap,
@@ -41,9 +40,6 @@ export function BoardToolbar({ controller }: { controller: ResearchBoardControll
           </button>
         </div>
       </div>
-      <p className="board-status" role="status">
-        {boardMessage}
-      </p>
       <div className="board-action-buttons">
         {solvePhase !== 'idle' && (
           <button

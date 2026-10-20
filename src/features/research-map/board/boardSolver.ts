@@ -75,8 +75,9 @@ function findBoardRouteCandidates(
 export type SolvedBoard = {
   board: Record<string, string>
   routes: string[][]
-  message: string
 }
+
+export type BoardSolveResult = SolvedBoard | { error: true }
 
 export function solveAllAnchors(
   board: Record<string, string>,
@@ -86,10 +87,9 @@ export function solveAllAnchors(
   catalog: Catalog,
   enabled: Set<string>,
   onSearch?: BoardSearchObserver,
-): SolvedBoard | { message: string } {
+): BoardSolveResult {
   const anchors = [...anchorCells].filter((id) => board[id] && !obstacles.has(id))
-  if (anchors.length < 2)
-    return { message: 'Place at least two source aspects on the map before using auto-connect.' }
+  if (anchors.length < 2) return { error: true }
 
   const workingBoard = Object.fromEntries(anchors.map((id) => [id, board[id]])) as Record<
     string,
@@ -155,11 +155,7 @@ export function solveAllAnchors(
       }
     }
 
-    if (!best)
-      return {
-        message:
-          'The source aspects cannot all be connected. Remove some obstacles or move the isolated aspects.',
-      }
+    if (!best) return { error: true }
 
     best.route.forEach((id, index) => {
       workingBoard[id] = best.aspects[index]
@@ -172,6 +168,5 @@ export function solveAllAnchors(
   return {
     board: workingBoard,
     routes,
-    message: `Auto-connected ${anchors.length} source aspects with ${routes.length} optimal branches.`,
   }
 }

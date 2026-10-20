@@ -21,7 +21,6 @@ export function useResearchBoard(
     () => new Set(initial?.anchorCells ?? []),
   )
   const [boardRoutes, setBoardRoutes] = useState<string[][]>(initial?.boardRoutes ?? [])
-  const [boardMessage, setBoardMessage] = useState(initial?.boardMessage ?? '')
   const [obstacles, setObstacles] = useState<Set<string>>(() => new Set(initial?.obstacles ?? []))
   const dragRef = useRef(false)
   const [paletteQuery, setPaletteQuery] = useState(initial?.paletteQuery ?? '')
@@ -38,14 +37,12 @@ export function useResearchBoard(
       boardSize,
       catalog,
       enabled,
-      setBoardMessage,
     })
 
   const restoreResearchBoard = useCallback((saved: ResearchSession) => {
     setBoard(saved.board)
     setAnchorCells(new Set(saved.anchorCells))
     setBoardRoutes(saved.boardRoutes)
-    setBoardMessage(saved.boardMessage)
     setObstacles(new Set(saved.obstacles))
     setPaletteQuery(saved.paletteQuery)
     setPendingAspect(saved.pendingAspect)
@@ -57,7 +54,6 @@ export function useResearchBoard(
     setPendingAspect(null)
     setAnchorCells((previous) => new Set(previous).add(target))
     setBoardRoutes([])
-    setBoardMessage('Aspect placed.')
   }
 
   const moveAspect = (source: string, target: string) => {
@@ -79,7 +75,6 @@ export function useResearchBoard(
       return next
     })
     setBoardRoutes([])
-    setBoardMessage('Aspect moved.')
   }
 
   const searchCells = new Set(searchTrace?.path ?? [])
@@ -104,7 +99,6 @@ export function useResearchBoard(
     setAnchorCells(new Set())
     setObstacles(new Set())
     setBoardRoutes([])
-    setBoardMessage(`Radius: ${Math.floor(nextSize / 2)} rings.`)
   }
 
   const toggleObstacle = (id: string) => {
@@ -115,7 +109,6 @@ export function useResearchBoard(
       return next
     })
     setBoardRoutes([])
-    setBoardMessage(obstacles.has(id) ? 'Cell open.' : 'Cell blocked.')
   }
 
   const clearMap = () => {
@@ -123,7 +116,6 @@ export function useResearchBoard(
     setAnchorCells(new Set())
     setObstacles(new Set())
     setBoardRoutes([])
-    setBoardMessage('')
   }
 
   const removeAspect = (id: string) => {
@@ -146,7 +138,6 @@ export function useResearchBoard(
     board,
     anchorCells,
     boardRoutes,
-    boardMessage,
     obstacles,
     dragRef,
     paletteQuery,

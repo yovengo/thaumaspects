@@ -12,7 +12,6 @@ export type ResearchSession = {
   board: Record<string, string>
   anchorCells: string[]
   boardRoutes: string[][]
-  boardMessage: string
   obstacles: string[]
   aspectsOpen: boolean
   paletteQuery: string

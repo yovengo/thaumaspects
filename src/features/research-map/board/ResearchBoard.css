@@ -17,14 +17,6 @@
     sans-serif;
 }
 
-.board-toolbar p {
-  max-width: 540px;
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .board-layout {
   display: grid;
   grid-template-columns: 185px minmax(0, 1fr);
@@ -264,13 +256,6 @@
   display: block;
 }
 
-.board-status {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .selected-aspects .aspect-icon {
   width: 23px;
   height: 23px;
@@ -397,15 +382,6 @@
   }
 }
 
-.board-status {
-  flex: 1 1 180px;
-  margin: 0;
-}
-
-.board-status:empty {
-  display: none;
-}
-
 .board-action-buttons {
   grid-column: auto;
   flex: 0 0 auto;
@@ -507,11 +483,6 @@
   font-weight: 800;
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-
-.board-toolbar .board-status {
-  flex: 1 1 150px;
-  text-align: right;
 }
 
 .board-toolbar .board-action-buttons {
@@ -632,11 +603,6 @@
   }
   .board-auto-label-short {
     display: inline;
-  }
-  .board-toolbar .board-status {
-    order: 3;
-    flex-basis: 100%;
-    text-align: left;
   }
 }
 
