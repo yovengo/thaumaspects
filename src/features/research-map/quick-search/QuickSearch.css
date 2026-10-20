@@ -1,0 +1,268 @@
+.quick-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
+  gap: 14px;
+}
+
+.quick-form,
+.quick-result {
+  min-height: 350px;
+  padding: 24px;
+}
+
+.aspect-selects {
+  display: grid;
+  grid-template-columns: 1fr 42px 1fr;
+  gap: 9px;
+  align-items: end;
+  margin: 25px 0 19px;
+}
+
+.field-label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field-label strong {
+  color: var(--gold2);
+}
+
+.aspect-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.aspect-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 9px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--text);
+  background: #19161b;
+  text-align: left;
+}
+
+.aspect-picker-trigger:hover,
+.aspect-picker-trigger[aria-expanded="true"] {
+  border-color: var(--gold);
+}
+
+.aspect-picker-trigger .aspect-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.aspect-picker-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.aspect-picker-trigger small {
+  display: none;
+}
+
+.aspect-picker-trigger b {
+  margin-left: auto;
+  color: var(--gold);
+  font-size: 17px;
+}
+
+.aspect-picker-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  left: 0;
+  width: min(290px, 83vw);
+  padding: 7px;
+  border: 1px solid #6b6171;
+  border-radius: 9px;
+  background: #1e1a21;
+  box-shadow: var(--shadow);
+  animation: reveal 0.16s ease both;
+}
+
+.aspect-picker-menu input {
+  width: 100%;
+  height: 39px;
+  padding: 8px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+.aspect-picker-options {
+  display: grid;
+  max-height: 240px;
+  overflow: auto;
+  margin-top: 5px;
+}
+
+.aspect-picker-options button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+
+.aspect-picker-options button:hover,
+.aspect-picker-options button[aria-selected="true"] {
+  background: var(--surface3);
+}
+
+.aspect-picker-options .aspect-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.aspect-picker-options small {
+  margin-left: auto;
+  color: var(--faint);
+}
+
+.aspect-picker-options p {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.swap-aspects {
+  height: 48px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--gold2);
+  background: var(--surface2);
+  font-size: 20px;
+}
+
+.quick-form .primary-button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 22px;
+}
+
+.quick-result .path-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 26px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.path-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.path-aspect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: var(--surface2);
+}
+
+.path-aspect .aspect-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.path-aspect span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.path-aspect small {
+  display: none;
+}
+
+.path-arrow {
+  color: var(--gold);
+}
+
+.used-aspects {
+  padding-top: 14px;
+  border-top: 1px solid var(--edge);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.used-aspects > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.used-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px #000;
+}
+
+.used-icon .aspect-icon {
+  position: absolute;
+  z-index: -1;
+  width: 32px;
+  height: 32px;
+}
+
+.empty-result {
+  display: grid;
+  place-items: center;
+  min-height: 210px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 730px) {
+  .quick-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .quick-form,
+  .quick-result {
+    padding: 16px;
+  }
+}
+
+.used-icon {
+  isolation: isolate;
+}
+
+.used-icon .aspect-icon {
+  z-index: 0;
+}
+
+.used-count {
+  position: relative;
+  z-index: 1;
+}

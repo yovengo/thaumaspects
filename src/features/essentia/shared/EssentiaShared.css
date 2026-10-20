@@ -1,0 +1,237 @@
+.ess-aspect-icon {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.ess-aspect-fallback {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  color: var(--gold2);
+  background: var(--surface3);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.ess-aspect-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ess-aspect-tag .ess-aspect-icon {
+  width: 19px;
+  height: 19px;
+}
+
+.ess-aspect-tag b {
+  color: var(--gold2);
+}
+
+.ess-item-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 39px;
+  height: 39px;
+  border: 1px solid #6b6172;
+  border-radius: 7px;
+  color: var(--gold2);
+  background: radial-gradient(circle, #5a5160, #2f2a33);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ess-item-icon.is-large {
+  width: 47px;
+  height: 47px;
+}
+
+.ess-item-icon img {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+
+.ess-item-icon.is-large img {
+  width: 35px;
+  height: 35px;
+}
+
+.ess-atlas-sprite {
+  display: block;
+  width: 32px;
+  height: 32px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+.ess-item-icon.is-approximate::after {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  color: var(--gold2);
+  background: #3d3841;
+  content: "?";
+  font:
+    10px Arial,
+    sans-serif;
+}
+
+.ess-more-aspects {
+  align-self: center;
+  padding: 3px 5px;
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  color: var(--gold2);
+  background: var(--surface2);
+  font-size: 10px;
+}
+
+.custom-select-trigger {
+  height: 46px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: #19161d;
+  color: var(--text);
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.custom-select-trigger:hover {
+  border-color: #887391;
+}
+
+.custom-select-trigger:focus-visible {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(216, 181, 120, 0.17);
+  outline: none;
+}
+
+.field-chevron {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-left: auto;
+  color: var(--gold);
+  transition: transform 0.15s ease;
+}
+
+[aria-expanded="true"] > .field-chevron {
+  transform: rotate(180deg);
+}
+
+.custom-select {
+  position: relative;
+  min-width: 0;
+}
+
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 0 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.custom-select-trigger[aria-expanded="true"] {
+  border-color: var(--gold);
+}
+
+.custom-select-menu {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  max-height: 250px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid #76657c;
+  border-radius: 9px;
+  background: #211c25;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38);
+  animation: reveal 0.14s ease both;
+}
+
+.custom-select-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+
+.custom-select-menu button:hover,
+.custom-select-menu button.is-highlighted {
+  background: var(--surface3);
+}
+
+.custom-select-check {
+  color: var(--gold2);
+}
+
+.favorite-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.ess-rendered-frame {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.ess-rendered-frame img {
+  position: absolute;
+  max-width: none;
+  image-rendering: pixelated;
+}
+
+.ess-atlas-sprite {
+  object-fit: contain;
+}
+
+.ess-picker-placeholder-icon {
+  display: grid;
+  flex: 0 0 25px;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  color: var(--gold);
+  font-size: 18px;
+}

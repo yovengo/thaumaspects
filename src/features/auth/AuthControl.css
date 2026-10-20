@@ -1,0 +1,502 @@
+.account-control {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.account-trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  border-color: var(--gold);
+  color: var(--gold2);
+  background: var(--surface2);
+}
+
+.account-trigger svg {
+  width: 19px;
+  height: 19px;
+}
+
+.account-sync-dot {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e1a65f;
+}
+
+.account-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(300px, calc(100vw - 24px));
+  padding: 16px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  color: var(--text);
+  background: #211c23;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.4);
+  transform-origin: top right;
+  animation: account-popover-enter 160ms ease-out both;
+}
+
+.account-popover.is-closing {
+  pointer-events: none;
+  animation: account-popover-exit 180ms ease-in both;
+}
+
+.account-feedback {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 108px;
+  text-align: center;
+}
+
+.account-feedback-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--surface2);
+}
+
+.account-feedback.is-success .account-feedback-icon {
+  border-color: #a48c62;
+  color: #241e22;
+  background: var(--gold2);
+  animation: account-feedback-check 220ms ease-out both;
+}
+
+.account-feedback-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.account-feedback strong {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.account-feedback.is-pending strong {
+  color: var(--muted);
+}
+
+@keyframes account-popover-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes account-popover-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+}
+
+@keyframes account-feedback-check {
+  from {
+    opacity: 0.65;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.account-popover > strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.account-popover small {
+  display: block;
+  margin-top: 11px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.account-signin {
+  display: flex;
+  align-items: stretch;
+  height: 42px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #18151a;
+}
+
+.account-signin:focus-within {
+  border-color: var(--gold2);
+  box-shadow: 0 0 0 2px rgba(232, 199, 139, 0.12);
+}
+
+.account-signin input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 12px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font:
+    700 15px / 1 "DM Sans",
+    sans-serif;
+  letter-spacing: 0.06em;
+}
+
+.account-signin input:focus {
+  outline: 0;
+  box-shadow: none;
+}
+
+.account-signin button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  border: 0;
+  border-left: 1px solid var(--edge);
+  color: #201b20;
+  background: var(--gold2);
+  cursor: pointer;
+}
+
+.account-signin button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.account-signin svg {
+  width: 19px;
+  height: 19px;
+}
+
+.account-recent {
+  margin-top: 14px;
+}
+
+.account-recent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.account-recent-heading span:last-child {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.account-recent-list {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-recent-item {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: #1b171d;
+}
+
+.account-recent-choice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-recent-choice:hover {
+  color: var(--gold2);
+  background: #302932;
+}
+
+.account-recent-choice:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.account-recent-choice span {
+  flex: 1;
+  font: 700 12px / 1 monospace;
+  letter-spacing: 0.05em;
+}
+
+.account-recent-choice svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--muted);
+}
+
+.account-recent-choice svg:last-child {
+  width: 12px;
+  height: 12px;
+  color: var(--gold2);
+}
+
+.account-recent-remove {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  flex: none;
+  border: 0;
+  border-left: 1px solid var(--edge);
+  color: var(--faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.account-recent-remove:hover {
+  color: var(--text);
+  background: #302932;
+}
+
+.account-recent-remove svg {
+  width: 13px;
+  height: 13px;
+}
+
+.account-create {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 10px;
+  padding: 0 12px;
+  border: 1px solid #685b4b;
+  border-radius: 8px;
+  color: var(--gold2);
+  background: #302932;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.account-create:hover {
+  border-color: var(--gold);
+  background: #3a3038;
+}
+
+.account-create svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.account-create:disabled,
+.account-signout:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.account-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 45px;
+  padding-left: 12px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: #18151a;
+}
+
+.account-code-row code {
+  color: var(--gold2);
+  font: 700 18px / 1.2 monospace;
+  letter-spacing: 0.055em;
+  user-select: all;
+}
+
+.account-code-row button {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  width: 44px;
+  margin-left: 8px;
+  border: 0;
+  border-left: 1px solid var(--edge);
+  border-radius: 0 7px 7px 0;
+  color: var(--gold2);
+  background: #302932;
+  cursor: pointer;
+}
+
+.account-code-row button:hover {
+  background: #3a3038;
+}
+
+.account-code-row button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.account-code-row.is-loading {
+  padding-right: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-signout {
+  display: block;
+  width: 100%;
+  min-height: 37px;
+  margin-top: 12px;
+  padding: 10px 2px 2px;
+  border: 0;
+  border-top: 1px solid var(--edge);
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.account-signout:hover {
+  color: var(--text);
+}
+
+.account-create:focus-visible,
+.account-signout:focus-visible,
+.account-code-row button:focus-visible,
+.account-recent-choice:focus-visible,
+.account-recent-remove:focus-visible {
+  outline: 2px solid var(--gold2);
+  outline-offset: 2px;
+}
+
+.account-error {
+  margin: 11px 0 0;
+  color: #f3a6a6;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.account-trigger:focus-visible {
+  outline: 2px solid var(--gold2);
+  outline-offset: 3px;
+}
+
+.account-trigger {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--gold2);
+  background: #29232d;
+}
+
+.account-trigger.is-signed-in {
+  border-color: #8f7854;
+  color: #221c22;
+  background: var(--gold2);
+}
+
+.account-trigger.is-signed-in:hover,
+.account-trigger.is-signed-in[aria-expanded="true"] {
+  border-color: var(--gold2);
+  color: #221c22;
+  background: #f1d8a8;
+}
+
+.account-trigger svg {
+  width: 21px;
+  height: 21px;
+}
+
+.account-trigger-symbol {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  animation: account-icon-enter 180ms ease-out both;
+}
+
+@keyframes account-icon-enter {
+  from {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 520px) {
+  .account-trigger {
+    width: 44px;
+    height: 44px;
+  }
+  .account-trigger svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-popover,
+  .account-popover.is-closing,
+  .account-feedback.is-success .account-feedback-icon,
+  .account-trigger-symbol {
+    animation: none;
+  }
+}

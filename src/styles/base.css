@@ -1,0 +1,146 @@
+.eyebrow {
+  margin: 0;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font:
+    700 18px / 1.3 "DM Sans",
+    sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.section-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.primary-button {
+  min-height: 42px;
+  padding: 9px 15px;
+  border: 1px solid #edd49d;
+  border-radius: 8px;
+  color: #1f1b21;
+  background: linear-gradient(#efd6a5, #d5b173);
+  font-size: 12px;
+  font-weight: 800;
+  transition:
+    filter 0.15s ease,
+    transform 0.15s ease;
+}
+
+.primary-button:hover {
+  filter: brightness(1.08);
+}
+
+.primary-button:active {
+  transform: scale(0.98);
+}
+
+.secondary-button,
+.quiet-button {
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.secondary-button:hover,
+.quiet-button:hover {
+  border-color: var(--gold);
+  color: var(--gold2);
+}
+
+.quiet-button {
+  color: var(--muted);
+  background: transparent;
+}
+
+input,
+select {
+  accent-color: var(--gold);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+input[type="search"],
+input[type="text"],
+input[type="number"],
+select {
+  color: var(--text);
+  background: #18151a;
+}
+
+input::placeholder {
+  color: #928799;
+}
+
+select {
+  appearance: auto;
+}
+
+footer {
+  margin-top: 26px;
+  color: var(--faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+footer a {
+  color: var(--gold);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.aspect-icon.is-astrum {
+  filter: invert(0.82) sepia(0.23) saturate(1.6) hue-rotate(205deg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

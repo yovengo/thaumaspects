@@ -1,0 +1,16 @@
+:root {
+  --page-background: #17131a;
+  --surface: #211d24;
+  --surface2: #29242d;
+  --surface3: #352e3a;
+  --edge: #4c4350;
+  --text: #f2edf1;
+  --muted: #b8aebd;
+  --faint: #948a9a;
+  --gold: #d8b578;
+  --gold2: #efd39c;
+  --green: #b9a4c9;
+  --warning: #e8b48b;
+  --radius: 12px;
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
