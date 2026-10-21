@@ -1,52 +1,108 @@
 import type { Combinations } from '@/features/research-map/model/types'
 
-export function createAspectPathFinder(combinations: Combinations, enabled: Set<string>) {
-  const graph: Record<string, string[]> = {}
-  const connect = (a: string, b: string) => {
-    if (!graph[a]) graph[a] = []
-    if (!graph[b]) graph[b] = []
-    graph[a].push(b)
-    graph[b].push(a)
+type SearchStep = {
+  aspect: string
+  steps: number
+  previous: SearchStep | null
+}
+
+function pathFromLastStep(last: SearchStep) {
+  const path: string[] = []
+  let current: SearchStep | null = last
+
+  while (current) {
+    path.push(current.aspect)
+    current = current.previous
   }
 
-  Object.entries(combinations).forEach(([compound, parts]) => {
-    connect(compound, parts[0])
-    connect(compound, parts[1])
-  })
+  return path.reverse()
+}
 
-  const paths = new Map<string, string[] | null>()
+function buildAspectGraph(combinations: Combinations) {
+  const neighborsByAspect: Record<string, string[]> = {}
 
-  return (from: string, to: string, minSpaces: number) => {
-    const key = `${from}\0${to}\0${minSpaces}`
-    if (paths.has(key)) return paths.get(key)!
+  const connect = (first: string, second: string) => {
+    if (!neighborsByAspect[first]) {
+      neighborsByAspect[first] = []
+    }
+    if (!neighborsByAspect[second]) {
+      neighborsByAspect[second] = []
+    }
 
-    const queue: { path: string[]; cost: number }[] = [{ path: [from], cost: 0 }]
-    const visited = new Map<string, Set<number>>()
+    neighborsByAspect[first].push(second)
+    neighborsByAspect[second].push(first)
+  }
 
-    while (queue.length) {
-      queue.sort((a, b) => a.cost - b.cost)
-      const current = queue.shift()!
-      const node = current.path[current.path.length - 1]
-      const edges = current.path.length - 1
-      const depths = visited.get(node) ?? new Set<number>()
-      if (depths.has(edges)) continue
-      depths.add(edges)
-      visited.set(node, depths)
+  for (const [compound, [firstPart, secondPart]] of Object.entries(combinations)) {
+    connect(compound, firstPart)
+    connect(compound, secondPart)
+  }
 
-      if (node === to && current.path.length > minSpaces + 1) {
-        paths.set(key, current.path)
-        return current.path
+  return neighborsByAspect
+}
+
+export function createAspectPathFinder(combinations: Combinations, enabled: Set<string>) {
+  const neighborsByAspect = buildAspectGraph(combinations)
+  const allowedAspects = new Set(enabled)
+  const cachedPaths = new Map<string, string[] | null>()
+
+  return function findPath(from: string, to: string, minSpaces: number) {
+    if (!allowedAspects.has(from) || !allowedAspects.has(to)) return null
+
+    const cacheKey = JSON.stringify([from, to, minSpaces])
+    const cachedPath = cachedPaths.get(cacheKey)
+    if (cachedPath !== undefined) return cachedPath
+
+    const minimumSteps = minSpaces + 1
+    const maximumSteps = Math.max(minimumSteps + 1, allowedAspects.size)
+    const queue: SearchStep[] = [{ aspect: from, steps: 0, previous: null }]
+    const visitedStepsByAspect = new Map<string, Set<number>>([[from, new Set([0])]])
+    let nextInQueue = 0
+
+    while (nextInQueue < queue.length) {
+      const current = queue[nextInQueue]
+      nextInQueue += 1
+
+      if (current.aspect === to && current.steps >= minimumSteps) {
+        const path = pathFromLastStep(current)
+        cachedPaths.set(cacheKey, path)
+        return path
       }
-      for (const next of graph[node] ?? []) {
-        queue.push({
-          path: [...current.path, next],
-          cost:
-            current.cost + (enabled.has(next) ? 1 : 100) + (current.path.includes(next) ? 8 : 0),
-        })
+
+      if (current.steps >= maximumSteps) continue
+
+      const neighbors = neighborsByAspect[current.aspect]
+      if (!neighbors) continue
+
+      for (const nextAspect of neighbors) {
+        if (!allowedAspects.has(nextAspect)) continue
+
+        const nextSteps = current.steps + 1
+        let visitedSteps = visitedStepsByAspect.get(nextAspect)
+        if (!visitedSteps) {
+          visitedSteps = new Set<number>()
+          visitedStepsByAspect.set(nextAspect, visitedSteps)
+        }
+        if (visitedSteps.has(nextSteps)) continue
+        visitedSteps.add(nextSteps)
+
+        const nextStep: SearchStep = {
+          aspect: nextAspect,
+          steps: nextSteps,
+          previous: current,
+        }
+
+        if (nextAspect === to && nextSteps >= minimumSteps) {
+          const path = pathFromLastStep(nextStep)
+          cachedPaths.set(cacheKey, path)
+          return path
+        }
+
+        queue.push(nextStep)
       }
     }
 
-    paths.set(key, null)
+    cachedPaths.set(cacheKey, null)
     return null
   }
 }
