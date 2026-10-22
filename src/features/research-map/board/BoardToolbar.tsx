@@ -2,9 +2,21 @@
 
 import { maximumBoardSize, minimumBoardSize } from '@/features/research-map/board/boardGeometry'
 import type { ResearchBoardController } from '@/features/research-map/board/useResearchBoard'
-import { BroomIcon, MinusIcon, PlusIcon, WandIcon } from '@/features/research-map/icons'
+import {
+  BroomIcon,
+  MinusIcon,
+  PlusIcon,
+  ScreenshotIcon,
+  WandIcon,
+} from '@/features/research-map/icons'
 
-export function BoardToolbar({ controller }: { controller: ResearchBoardController }) {
+export function BoardToolbar({
+  controller,
+  onImportScreenshot,
+}: {
+  controller: ResearchBoardController
+  onImportScreenshot: () => void
+}) {
   const {
     solvePhase,
     boardSize,
@@ -41,6 +53,19 @@ export function BoardToolbar({ controller }: { controller: ResearchBoardControll
         </div>
       </div>
       <div className="board-action-buttons">
+        <button
+          className="quiet-button board-screenshot-button"
+          type="button"
+          aria-label="Import screenshot (beta)"
+          disabled={solvePhase !== 'idle'}
+          onClick={onImportScreenshot}
+        >
+          <ScreenshotIcon />
+          <span className="board-screenshot-label">Import screenshot</span>
+          <span className="board-screenshot-beta" aria-hidden="true">
+            Beta
+          </span>
+        </button>
         {solvePhase !== 'idle' && (
           <button
             className="quiet-button board-solve-control"

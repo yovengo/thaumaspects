@@ -391,6 +391,51 @@
   gap: 8px;
 }
 
+.board-screenshot-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.board-screenshot-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.board-screenshot-beta {
+  padding: 2px 5px;
+  border: 1px solid rgba(216, 181, 120, 0.38);
+  border-radius: 5px;
+  color: var(--gold2);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 520px) {
+  .board-screenshot-label {
+    display: none;
+  }
+
+  .board-screenshot-button {
+    position: relative;
+    width: 42px;
+    padding: 0;
+  }
+
+  .board-screenshot-beta {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    padding: 2px 3px;
+    background: var(--surface);
+    font-size: 8px;
+  }
+}
+
 .board-auto-button svg {
   width: 18px;
   height: 18px;

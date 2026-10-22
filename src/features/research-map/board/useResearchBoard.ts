@@ -149,6 +149,7 @@ export function useResearchBoard(
   const boardCanvasHeight = (boardSize - 1) * hexRowStep + hexHeight + hexRowStep / 2
 
   return {
+    catalog,
     board,
     anchorCells,
     boardRoutes,

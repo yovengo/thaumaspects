@@ -57,6 +57,23 @@ export function BroomIcon() {
   )
 }
 
+export function ScreenshotIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 8V5a1 1 0 0 1 1-1h3m8 0h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3m8 0h3a1 1 0 0 0 1-1v-3" />
+      <path d="m12 8-4 2.3v4.6l4 2.3 4-2.3v-4.6L12 8Z" />
+    </svg>
+  )
+}
+
 export function SearchIcon() {
   return (
     <svg
