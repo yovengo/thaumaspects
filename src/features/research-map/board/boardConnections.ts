@@ -28,6 +28,8 @@ type ConnectionSearch = {
   obstacles: Set<string>
   boardSize: number
   findAspectPath: (from: string, to: string, minSpaces: number) => string[] | null
+  findAspectPathWithSteps: (from: string, to: string, steps: number) => string[] | null
+  aspectWeights: Readonly<Record<string, number>>
   options: BoardSearchOptions
   onSearch?: BoardSearchObserver
 }
@@ -50,21 +52,25 @@ function findBestConnectionForPair(
   })
   if (!shortestRoute) return null
 
+  const fromAspect = search.board[source]
+  const toAspect = search.board[target]
+  const shortestAspectPath = search.findAspectPath(fromAspect, toAspect, shortestRoute.length - 2)
+  if (!shortestAspectPath) return null
+
   let best: ConnectionCandidate | null = null
-  const searchedLengths = new Set<number>()
+  const shortestPossibleLength = Math.max(shortestRoute.length, shortestAspectPath.length)
 
   for (let extraSpaces = 0; extraSpaces <= search.options.maxExtraSpaces; extraSpaces += 1) {
-    const minimumSpaces = Math.max(0, shortestRoute.length - 2 + extraSpaces)
-    const aspects = search.findAspectPath(search.board[source], search.board[target], minimumSpaces)
-    if (!aspects || searchedLengths.has(aspects.length)) continue
-    searchedLengths.add(aspects.length)
+    const cellCount = shortestPossibleLength + extraSpaces
+    const aspects = search.findAspectPathWithSteps(fromAspect, toAspect, cellCount - 1)
+    if (!aspects) continue
 
     const routes = findBoardRoutesWithCellCount({
       source,
       target,
       blockedCells,
       boardSize: search.boardSize,
-      cellCount: aspects.length,
+      cellCount,
       maxRoutes: search.options.maxRoutesPerLength,
       maxExploredStates: search.options.maxExploredStatesPerLength,
       onSearch: search.onSearch,
@@ -79,6 +85,7 @@ function findBestConnectionForPair(
         connected: search.connected,
         remaining: search.remaining,
         boardSize: search.boardSize,
+        aspectWeights: search.aspectWeights,
       })
       if (candidate && (!best || compareConnections(candidate, best) < 0)) best = candidate
     }

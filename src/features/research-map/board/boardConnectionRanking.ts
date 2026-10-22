@@ -8,6 +8,7 @@ export type ConnectionCandidate = {
   target: string
   route: string[]
   aspects: string[]
+  aspectCost: number
   newCells: number
   turns: number
   distanceToRemaining: number
@@ -21,6 +22,7 @@ type ConnectionAssessment = {
   connected: Set<string>
   remaining: Set<string>
   boardSize: number
+  aspectWeights: Readonly<Record<string, number>>
 }
 
 export function assessConnection({
@@ -31,6 +33,7 @@ export function assessConnection({
   connected,
   remaining,
   boardSize,
+  aspectWeights,
 }: ConnectionAssessment): ConnectionCandidate | null {
   const futureNetwork = new Set([...connected, ...route])
   const blockedAfterRoute = new Set([...blockedCells, ...route])
@@ -51,10 +54,20 @@ export function assessConnection({
     distanceToRemaining += nearestDistance
   }
 
+  let aspectCost = 0
+  for (const aspect of aspects.slice(1, -1)) {
+    const weight = aspectWeights[aspect]
+    if (!Number.isFinite(weight) || weight <= 0) {
+      throw new Error(`Invalid aspect weight: ${aspect}`)
+    }
+    aspectCost += weight
+  }
+
   return {
     target,
     route,
     aspects,
+    aspectCost,
     newCells: route.length - 2,
     turns: routeTurns(route),
     distanceToRemaining,
@@ -62,6 +75,9 @@ export function assessConnection({
 }
 
 export function compareConnections(left: ConnectionCandidate, right: ConnectionCandidate) {
+  if (Math.abs(left.aspectCost - right.aspectCost) > 1e-9) {
+    return left.aspectCost - right.aspectCost
+  }
   if (left.newCells !== right.newCells) return left.newCells - right.newCells
   if (left.turns !== right.turns) return left.turns - right.turns
   return left.distanceToRemaining - right.distanceToRemaining

@@ -48,11 +48,8 @@ export function solveAllAnchors({
   const connected = new Set<string>([anchors[0]])
   const remaining = new Set(anchors.slice(1))
   const routes: string[][] = []
-  const { findPath: findAspectPath } = createAspectPathFinder(
-    catalog.combinations,
-    enabled,
-    catalog.aspectWeights,
-  )
+  const { findPath: findAspectPath, findPathWithSteps: findAspectPathWithSteps } =
+    createAspectPathFinder(catalog.combinations, enabled, catalog.aspectWeights)
 
   while (remaining.size > 0) {
     const connection = findBestConnection({
@@ -62,6 +59,8 @@ export function solveAllAnchors({
       obstacles,
       boardSize,
       findAspectPath,
+      findAspectPathWithSteps,
+      aspectWeights: catalog.aspectWeights,
       options,
       onSearch,
     })
