@@ -1,6 +1,10 @@
 import { addonDictionary } from '@/data/addons.js'
 import { translate } from '@/data/aspects.js'
 import { gtnhResearchDefinition } from '@/data/versions.js'
+import {
+  calculateAspectCosts,
+  calculateAspectWeights,
+} from '@/features/research-map/model/aspectCosts'
 import type {
   AddonDefinition,
   Catalog,
@@ -27,8 +31,12 @@ export function getCatalog(): Catalog {
     addonAspects.push(...addon.aspects)
   })
 
+  const aspectCosts = calculateAspectCosts(researchDefinition.base_aspects, combinations)
+
   return {
     combinations,
+    aspectCosts,
+    aspectWeights: calculateAspectWeights(aspectCosts),
     aspects: [
       ...new Set([
         ...researchDefinition.base_aspects,

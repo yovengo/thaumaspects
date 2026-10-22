@@ -14,4 +14,6 @@ export type AddonDefinition = {
 export type Catalog = {
   aspects: string[]
   combinations: Combinations
+  aspectCosts: Record<string, number>
+  aspectWeights: Record<string, number>
 }
