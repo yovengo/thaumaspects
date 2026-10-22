@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useAspectAvailability } from '@/features/research-map/availability/useAspectAvailability'
+import type { ResearchBoardInput } from '@/features/research-map/board/boardInput'
 import { useResearchBoard } from '@/features/research-map/board/useResearchBoard'
 import { getCatalog } from '@/features/research-map/model/catalog'
 import { useQuickSearch } from '@/features/research-map/quick-search/useQuickSearch'
@@ -15,9 +16,11 @@ import {
 
 const catalog = getCatalog()
 
-export function useResearchMap() {
+export function useResearchMap(boardInput?: ResearchBoardInput | null) {
   const initialSession = useRef(typeof window !== 'undefined' ? getCachedResearchSession() : null)
+  const appliedBoardInput = useRef<string | null>(null)
   const [sessionReady, setSessionReady] = useState(Boolean(initialSession.current))
+  const [boardInputError, setBoardInputError] = useState<string | null>(null)
   const [mode, setMode] = useState<ResearchMode>(initialSession.current?.mode ?? 'board')
   const availability = useAspectAvailability(initialSession.current, catalog)
   const quickSearch = useQuickSearch(initialSession.current, catalog, availability.enabled)
@@ -48,6 +51,23 @@ export function useResearchMap() {
     }
     setSessionReady(true)
   }, [sessionReady, restoreAvailability, restoreQuickSearch, restoreResearchBoard])
+
+  useEffect(() => {
+    if (!sessionReady) return
+    if (!boardInput) {
+      if (appliedBoardInput.current !== null) {
+        appliedBoardInput.current = null
+        setBoardInputError(null)
+      }
+      return
+    }
+
+    const inputKey = JSON.stringify(boardInput)
+    if (inputKey === appliedBoardInput.current) return
+    appliedBoardInput.current = inputKey
+    const result = researchBoard.loadBoard(boardInput)
+    setBoardInputError(result.ok ? null : result.error)
+  }, [boardInput, sessionReady, researchBoard.loadBoard])
 
   useEffect(() => {
     if (!sessionReady || solvePhase !== 'idle') return
@@ -103,6 +123,7 @@ export function useResearchMap() {
 
   return {
     catalog,
+    boardInputError,
     mode,
     switchMode,
     quickSearch,

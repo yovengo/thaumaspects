@@ -3,6 +3,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
+  type BoardSearchOptions,
   type BoardSearchProgress,
   type SolvedBoard,
   solveAllAnchors,
@@ -20,6 +21,7 @@ type BoardSolverInput = {
   boardSize: number
   catalog: Catalog
   enabled: Set<string>
+  options?: BoardSearchOptions
 }
 
 export function useBoardSolver({
@@ -32,6 +34,7 @@ export function useBoardSolver({
   boardSize,
   catalog,
   enabled,
+  options,
 }: BoardSolverInput) {
   const [solvePhase, setSolvePhase] = useState<'idle' | 'searching' | 'revealing'>('idle')
   const [searchTrace, setSearchTrace] = useState<BoardSearchProgress | null>(null)
@@ -170,7 +173,9 @@ export function useBoardSolver({
     }
 
     const fallback = () =>
-      receiveResult(solveAllAnchors(board, anchorCells, obstacles, boardSize, catalog, enabled))
+      receiveResult(
+        solveAllAnchors({ board, anchorCells, obstacles, boardSize, catalog, enabled, options }),
+      )
 
     try {
       const worker = new Worker(new URL('./boardSolver.worker.ts', import.meta.url))
@@ -192,6 +197,7 @@ export function useBoardSolver({
         boardSize,
         catalog,
         enabled: [...enabled],
+        options,
       } satisfies SolveRequest)
     } catch {
       fallback()

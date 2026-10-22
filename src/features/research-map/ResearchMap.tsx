@@ -1,13 +1,15 @@
 'use client'
 
 import { AspectSettings } from '@/features/research-map/availability/AspectSettings'
+import type { ResearchBoardInput } from '@/features/research-map/board/boardInput'
 import { ResearchBoard } from '@/features/research-map/board/ResearchBoard'
 import { ArrowLeftIcon, SearchIcon } from '@/features/research-map/icons'
 import { QuickSearch } from '@/features/research-map/quick-search/QuickSearch'
 import { useResearchMap } from '@/features/research-map/state/useResearchMap'
 
-export default function ResearchMap() {
-  const { catalog, mode, switchMode, quickSearch, researchBoard, availability } = useResearchMap()
+export default function ResearchMap({ boardInput }: { boardInput?: ResearchBoardInput | null }) {
+  const { catalog, mode, switchMode, quickSearch, researchBoard, availability, boardInputError } =
+    useResearchMap(boardInput)
 
   return (
     <>
@@ -25,6 +27,11 @@ export default function ResearchMap() {
           )}
         </button>
       </div>
+      {boardInputError && (
+        <p className="board-input-error" role="alert">
+          Unable to load map: {boardInputError}
+        </p>
+      )}
       {mode === 'board' && <ResearchBoard controller={researchBoard} />}
       {mode === 'quick' && <QuickSearch catalog={catalog} controller={quickSearch} />}
       <AspectSettings

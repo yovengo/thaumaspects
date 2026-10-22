@@ -1,3 +1,8 @@
+.board-input-error {
+  margin: 0 0 12px;
+  color: #f0b5a8;
+}
+
 .research-board {
   padding: 20px;
 }

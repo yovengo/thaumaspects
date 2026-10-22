@@ -1,4 +1,5 @@
 import {
+  type BoardSearchOptions,
   type BoardSearchProgress,
   type BoardSolveResult,
   solveAllAnchors,
@@ -12,6 +13,7 @@ export type SolveRequest = {
   boardSize: number
   catalog: Catalog
   enabled: string[]
+  options?: BoardSearchOptions
 }
 
 export type SolveResponse =
@@ -23,21 +25,22 @@ self.onmessage = (event: MessageEvent<SolveRequest>) => {
   let lastUpdate = -Infinity
 
   try {
-    const { board, anchors, obstacles, boardSize, catalog, enabled } = event.data
-    const result = solveAllAnchors(
+    const { board, anchors, obstacles, boardSize, catalog, enabled, options } = event.data
+    const result = solveAllAnchors({
       board,
-      new Set(anchors),
-      new Set(obstacles),
+      anchorCells: new Set(anchors),
+      obstacles: new Set(obstacles),
       boardSize,
       catalog,
-      new Set(enabled),
-      (progress) => {
+      enabled: new Set(enabled),
+      options,
+      onSearch: (progress) => {
         const now = performance.now()
         if (now - lastUpdate < 70) return
         lastUpdate = now
         self.postMessage({ type: 'search', progress } satisfies SolveResponse)
       },
-    )
+    })
     self.postMessage({ type: 'complete', result } satisfies SolveResponse)
   } catch {
     self.postMessage({ type: 'error' } satisfies SolveResponse)

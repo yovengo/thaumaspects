@@ -6,6 +6,10 @@ import {
   hexHeight,
   hexRowStep,
 } from '@/features/research-map/board/boardGeometry'
+import {
+  parseResearchBoardInput,
+  type ResearchBoardInput,
+} from '@/features/research-map/board/boardInput'
 import { useBoardSolver } from '@/features/research-map/board/useBoardSolver'
 import { aspectLabel as label } from '@/features/research-map/model/catalog'
 import type { Catalog } from '@/features/research-map/model/types'
@@ -48,6 +52,24 @@ export function useResearchBoard(
     setPendingAspect(saved.pendingAspect)
     setBoardSize(saved.boardSize)
   }, [])
+
+  const loadBoard = (input: ResearchBoardInput) => {
+    let imported: ReturnType<typeof parseResearchBoardInput>
+    try {
+      imported = parseResearchBoardInput(input, catalog)
+    } catch (error) {
+      return { ok: false as const, error: (error as Error).message }
+    }
+
+    if (solvePhase !== 'idle') cancelSolve()
+    setBoard(imported.board)
+    setAnchorCells(new Set(imported.anchorCells))
+    setObstacles(new Set(imported.obstacles))
+    setBoardRoutes([])
+    setBoardSize(imported.boardSize)
+    setPendingAspect(null)
+    return { ok: true as const }
+  }
 
   const placeAspect = (target: string, aspect: string) => {
     setBoard((previous) => ({ ...previous, [target]: aspect }))
@@ -146,6 +168,7 @@ export function useResearchBoard(
     boardCanvasHeight,
     boardMapHeight: Math.max(420, Math.ceil(boardCanvasHeight + 38)),
     restoreResearchBoard,
+    loadBoard,
     placeAspect,
     moveAspect,
     finishReveal,
