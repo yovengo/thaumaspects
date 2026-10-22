@@ -1,14 +1,14 @@
 import type { Combinations } from '@/features/research-map/model/types'
 
-type SearchStep = {
+type PathState = {
   aspect: string
-  steps: number
-  previous: SearchStep | null
+  cost: number
+  previous: PathState | null
 }
 
-function pathFromLastStep(last: SearchStep) {
+function pathFromLastState(last: PathState) {
   const path: string[] = []
-  let current: SearchStep | null = last
+  let current: PathState | null = last
 
   while (current) {
     path.push(current.aspect)
@@ -22,12 +22,8 @@ function buildAspectGraph(combinations: Combinations) {
   const neighborsByAspect: Record<string, string[]> = {}
 
   const connect = (first: string, second: string) => {
-    if (!neighborsByAspect[first]) {
-      neighborsByAspect[first] = []
-    }
-    if (!neighborsByAspect[second]) {
-      neighborsByAspect[second] = []
-    }
+    if (!neighborsByAspect[first]) neighborsByAspect[first] = []
+    if (!neighborsByAspect[second]) neighborsByAspect[second] = []
 
     neighborsByAspect[first].push(second)
     neighborsByAspect[second].push(first)
@@ -41,70 +37,72 @@ function buildAspectGraph(combinations: Combinations) {
   return neighborsByAspect
 }
 
-export function createAspectPathFinder(combinations: Combinations, enabled: Set<string>) {
+export function createAspectPathFinder(
+  combinations: Combinations,
+  enabled: Set<string>,
+  aspectWeights: Readonly<Record<string, number>>,
+) {
   const neighborsByAspect = buildAspectGraph(combinations)
   const allowedAspects = new Set(enabled)
-  const cachedPaths = new Map<string, string[] | null>()
+  const layersBySource = new Map<string, Map<string, PathState>[]>()
 
-  return function findPath(from: string, to: string, minSpaces: number) {
-    if (!allowedAspects.has(from) || !allowedAspects.has(to)) return null
-
-    const cacheKey = JSON.stringify([from, to, minSpaces])
-    const cachedPath = cachedPaths.get(cacheKey)
-    if (cachedPath !== undefined) return cachedPath
-
-    const minimumSteps = minSpaces + 1
-    const maximumSteps = Math.max(minimumSteps + 1, allowedAspects.size)
-    const queue: SearchStep[] = [{ aspect: from, steps: 0, previous: null }]
-    const visitedStepsByAspect = new Map<string, Set<number>>([[from, new Set([0])]])
-    let nextInQueue = 0
-
-    while (nextInQueue < queue.length) {
-      const current = queue[nextInQueue]
-      nextInQueue += 1
-
-      if (current.aspect === to && current.steps >= minimumSteps) {
-        const path = pathFromLastStep(current)
-        cachedPaths.set(cacheKey, path)
-        return path
-      }
-
-      if (current.steps >= maximumSteps) continue
-
-      const neighbors = neighborsByAspect[current.aspect]
-      if (!neighbors) continue
-
-      for (const nextAspect of neighbors) {
-        if (!allowedAspects.has(nextAspect)) continue
-
-        const nextSteps = current.steps + 1
-        let visitedSteps = visitedStepsByAspect.get(nextAspect)
-        if (!visitedSteps) {
-          visitedSteps = new Set<number>()
-          visitedStepsByAspect.set(nextAspect, visitedSteps)
-        }
-        if (visitedSteps.has(nextSteps)) continue
-        visitedSteps.add(nextSteps)
-
-        const nextStep: SearchStep = {
-          aspect: nextAspect,
-          steps: nextSteps,
-          previous: current,
-        }
-
-        if (nextAspect === to && nextSteps >= minimumSteps) {
-          const path = pathFromLastStep(nextStep)
-          cachedPaths.set(cacheKey, path)
-          return path
-        }
-
-        queue.push(nextStep)
-      }
+  function layerAt(from: string, steps: number) {
+    let layers = layersBySource.get(from)
+    if (!layers) {
+      layers = [new Map([[from, { aspect: from, cost: 0, previous: null }]])]
+      layersBySource.set(from, layers)
     }
 
-    cachedPaths.set(cacheKey, null)
+    while (layers.length <= steps) {
+      const previousLayer = layers[layers.length - 1]
+      const nextLayer = new Map<string, PathState>()
+
+      for (const state of previousLayer.values()) {
+        for (const neighbor of neighborsByAspect[state.aspect] ?? []) {
+          if (!allowedAspects.has(neighbor)) continue
+
+          const weight = aspectWeights[neighbor]
+          if (!Number.isFinite(weight) || weight <= 0) {
+            throw new Error(`Invalid aspect weight: ${neighbor}`)
+          }
+
+          const cost = state.cost + weight
+          const previousBest = nextLayer.get(neighbor)
+          if (!previousBest || cost < previousBest.cost) {
+            nextLayer.set(neighbor, { aspect: neighbor, cost, previous: state })
+          }
+        }
+      }
+
+      layers.push(nextLayer)
+    }
+
+    return layers[steps]
+  }
+
+  function findPathWithSteps(from: string, to: string, steps: number): string[] | null {
+    if (!Number.isInteger(steps) || steps < 0) throw new RangeError('Steps must be nonnegative')
+    if (!allowedAspects.has(from) || !allowedAspects.has(to)) return null
+
+    const last = layerAt(from, steps).get(to)
+    return last ? pathFromLastState(last) : null
+  }
+
+  function findPath(from: string, to: string, minSpaces: number): string[] | null {
+    if (!allowedAspects.has(from) || !allowedAspects.has(to)) return null
+
+    const minimumSteps = Math.max(1, minSpaces + 1)
+    const maximumSteps = Math.max(minimumSteps + 1, allowedAspects.size)
+
+    for (let steps = minimumSteps; steps <= maximumSteps; steps += 1) {
+      const path = findPathWithSteps(from, to, steps)
+      if (path) return path
+    }
+
     return null
   }
+
+  return { findPath, findPathWithSteps }
 }
 
 export function findAspectPath(
@@ -113,6 +111,7 @@ export function findAspectPath(
   minSpaces: number,
   combinations: Combinations,
   enabled: Set<string>,
+  aspectWeights: Readonly<Record<string, number>>,
 ) {
-  return createAspectPathFinder(combinations, enabled)(from, to, minSpaces)
+  return createAspectPathFinder(combinations, enabled, aspectWeights).findPath(from, to, minSpaces)
 }

@@ -41,7 +41,9 @@ export function useQuickSearch(
   )
 
   const runSearch = ({ from, to, minSpaces }: QuickSearchValues) => {
-    setResult(findAspectPath(from, to, minSpaces, catalog.combinations, enabled))
+    setResult(
+      findAspectPath(from, to, minSpaces, catalog.combinations, enabled, catalog.aspectWeights),
+    )
     setSearched(true)
   }
 
