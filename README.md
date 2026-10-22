@@ -1,80 +1,109 @@
 # Thaumaspects
 
-Thaumaspects is a GTNH research and essentia companion built with Next.js. It is based on the open-source [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) repository: its connection-finding logic, aspect data, and artwork were brought over and adapted into the site.
+GT New Horizons research map solver and essentia planner.
 
-Website: [thaumaspects.vercel.app](https://thaumaspects.vercel.app/)
+**Live:** [thaumaspects.vercel.app](https://thaumaspects.vercel.app/)
 
-The helper finds aspect connections for GTNH research. In addition to quick chain searching, it includes an interactive research map where you can drag aspects, place obstacles, and automatically build routes.
+## What it does
 
-## Features
+- **Research Map:** place source aspects and obstacles on a hex board, then connect the sources automatically. Quick Search finds an aspect chain without a board.
+- **Essentia Planner:** enter the required aspects and quantities; get furnace items, essentia balance, alternative mixes, and a searchable item catalog. Build a mix manually or return to the recommendation.
+- **Screenshot import (beta):** recognize a GTNH research screenshot, review the detected cells, and import them into the board.
+- **Preferences:** mark favorite or unavailable items. Access-code accounts optionally sync these lists between devices; anonymous preferences stay in the browser.
 
-- GTNH-focused research map using Thaumcraft aspect relationships.
-- All 69 GTNH research aspects, including Forbidden Magic, Magic Bees, GregTech, Avaritia, Thaumic Boots, and GTNH additions.
-- Chain search that accounts for unavailable aspects.
-- An interactive, resizable hex map with drag-and-drop and obstacles.
-- Automatic route building and visualization on the map.
-- Essentia planner: enter one or more required aspects and get item quantities, totals, and alternative sets for the alchemical furnace.
-- Optional access-code sign-in and cloud favorites shared across devices.
+Routes: `/` for Research Map, `/essentia` for Essentia Planner.
 
-## Essentia data
+## Stack
 
-The planner contains **24,066 item profiles** from the `essentia_smelting` aspect entries in the [GTNH Planner 2.9.0-beta-2 Oracle dataset](https://github.com/Samiracle64/gtnh-factory-flow), plus **3,940 fallback profiles** from the [official GTNH Calculator 2.8.0-v5 data export](https://github.com/ShadowTheAge/gtnh-data/tree/2.8.0-v5). Fallback profiles are imported only when the 2.9 registry ID, mod and display name all match and the 2.9 aspect profile is absent. The 2.9 profile always takes precedence. All 28,006 profiles participate in planning; fallback entries are marked as GTNH 2.8.0 in the UI. The searchable coverage index also includes items in the 2.9 registry without an aspect profile. Names, families and crafting recipes are never used to invent aspects. Exported aspect tags do not independently verify furnace behavior in a running 2.9 client.
+| Layer | Implementation |
+| --- | --- |
+| App | Next.js 16 App Router, React 19, TypeScript 6 |
+| Async state and forms | TanStack Query, React Hook Form |
+| Compute | Web Workers for board solving, planner search, and screenshot recognition |
+| Computer vision | OpenCV.js; image processing and template matching in the browser |
+| Storage | Static GTNH catalog; optional PostgreSQL on Supabase for accounts and preferences |
+| Tooling | pnpm, Biome, Node test runner, Vercel Analytics |
 
-The default plan searches combinations with a bounded beam search, so different requested aspects may come from different items. A generic acquisition score is calculated from the available machine-recipe and crop graph for the selected tier; it considers ingredients, processing depth and renewable crop harvests. The Oracle export has no ordinary crafting recipes, so the score cannot account for a simpler crafting route. The planner also accounts for aspect concentration, unwanted essentia and the number of item types, keeping low-yield everyday materials ahead of concentrated artifacts in the default plan. There are no per-item bonuses, exclusions, or hand-entered aspect profiles. Players can mark stockpiled items or exclude unavailable ones. Acquisition is an estimate: the dataset does not know world rarity, the player's inventory, or all progression gates, and the bounded search does not prove a global optimum.
+## Data
 
-The result panel has a searchable source picker across every item containing a requested aspect. Exact item names appear first, and selecting a source immediately builds a custom furnace plan. The short list of recommended alternatives is deliberately ranked; it does not hide the remaining matching profiles from the source picker.
+- **Research graph:** 69 GTNH aspects, including addon aspects. Every compound connects to both recipe ingredients.
+- **Furnace catalog:** 28,006 aspect profiles. 24,066 come from the [GTNH Planner 2.9.0-beta-2 Oracle export](https://github.com/Samiracle64/gtnh-factory-flow); 3,940 are [GTNH Calculator 2.8.0-v5](https://github.com/ShadowTheAge/gtnh-data/tree/2.8.0-v5) fallbacks. A fallback is used only when its registry ID, mod, and normalized name match an item in 2.9 that has no aspect profile. The 2.9 profile takes precedence. Each fallback keeps its source-version label.
+- **Coverage index:** 38,097 additional registry items have no aspect profile. They are not treated as furnace sources. Aspect values are never inferred from item names or recipes.
+- **Acquisition data:** the 2.9 export indexes 246,983 recipes. Stage-dependent source scores use its machine recipes and crop produce; world sources come from ore entries. Item icons come from exact rendered 2.9 assets or uniquely matched tiles in the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4).
 
-The catalog contains 69 aspects. Item pictures use the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4) when a name and mod have a unique match, otherwise the exact rendered icon from the 2.9 resource index. Atlas tiles are served individually through `/api/atlas-icons/[id]`; aspect and item pictures use Next.js `Image` optimization. A small number of items have no icon in either source and show initials instead. The picker also shows initials when an aspect icon is unavailable. Minecraft and mod textures belong to their respective creators.
+The generated catalog lives in `public/item-aspects-gtnh.json`. It is shipped with the app, not queried from Supabase.
 
-To regenerate the catalog from the downloaded Oracle resource index and recipe shards, GTNH Calculator 2.8.0-v5 binary, and GTNH Calculator 2.7.4 icon atlas index:
+## Research Map algorithms
 
-```bash
-python3 scripts/build-oracle-catalog.py --data-274 /path/to/2.7.4/data.bin --data-280 /path/to/2.8.0-v5/data.bin --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards --download
-python3 scripts/build-acquisition-scores.py --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards
-```
+1. **Aspect cost.** A primal has raw cost `1`. A compound has raw cost `1 + cost(first ingredient) + cost(second ingredient)`; costs are computed recursively and memoized. Path weight is `1 + log2(raw cost)`, so expensive compounds matter without making them prohibitively costly.
+2. **Aspect chain.** The undirected aspect graph excludes disabled aspects. Layered dynamic programming stores the cheapest path to each aspect for each exact step count and caches layers per source. Repeated aspects are allowed. Quick Search checks lengths from shortest upward and chooses the cheapest chain at the first feasible length.
+3. **Board route.** Breadth-first search finds the shortest available route through hex cells. Bounded depth-first search enumerates routes of an exact length, with distance pruning; occupied and blocked cells are excluded.
+4. **Connection choice.** For every connected-source/remaining-target pair, the solver matches a board route to an aspect chain of the same length. It tests the minimum feasible length and up to two additional cells. Candidates are ranked by intermediate-aspect cost, then new cells, turns, and distance to remaining sources. A route that seals off an unconnected source is rejected.
+5. **Whole board.** The best connection is added to the connected set and the process repeats. This is a greedy solver, not a proof of a globally optimal board. Search is capped at 12 routes and 30,000 explored states per length. Progress is streamed from a Web Worker and can be cancelled.
 
-The generator validates unique registry IDs and preserves the source version of every fallback profile. The raw Oracle shards and calculator binaries are build inputs and are not committed. The planned infusion-recipe picker is outside the current scope.
+Implementation: [aspect costs](src/features/research-map/model/aspectCosts.ts), [aspect path finder](src/features/research-map/model/aspectGraph.ts), [board routes](src/features/research-map/board/boardRouteSearch.ts), [connection search](src/features/research-map/board/boardConnections.ts), [board solver](src/features/research-map/board/boardSolver.ts).
 
-## Getting started
+## Essentia Planner algorithms
 
-The Research Map is at `/`, and the Essentia Planner is at `/essentia`. Quick Search remains available from the Research Map.
+The target is a vector of required aspect amounts. Each catalog item contributes its full aspect vector, so a plan can combine different items for different requirements.
+
+- **Source effort:** derived from stage-filtered acquisition scores, recipe depth, and aspect concentration. Favorites receive a low effort score; unavailable items are excluded. Acquisition scores are built by relaxing the machine-recipe and crop graph. They do not model every ordinary crafting recipe, world rarity, or the player's inventory.
+- **Practical mix:** candidate pool includes, for each requested aspect, the 40 lowest-effort and 40 best yield-adjusted sources, plus matching favorites. Three greedy aspect orders provide initial plans. A bounded beam search then explores item quantities `1`, `floor(remaining / yield)`, and `ceil(remaining / yield)`. It scores acquisition effort, unwanted essentia, and additional item types; equivalent remaining states are deduplicated and a lower bound guides the beam.
+- **Alternatives:** separate construction passes produce mixes such as fewest items and less excess essentia. The catalog exposes all matching sources, including those outside the search shortlist; a manual mix can replace the recommendation.
+- **Performance:** the catalog and results are cached, search runs in a Web Worker, and a favorite-only preview can be shown before the full search completes.
+
+The beam keeps 80 states for up to four requested aspects, otherwise 32, for at most 20 expansion rounds. Recommendations are heuristic; they are not guaranteed global optima or promises that an item is obtainable at a selected tier.
+
+Implementation: [acquisition ranking](src/features/essentia/model/itemRanking.ts), [practical search](src/features/essentia/model/practicalSearch.ts), [plan assembly](src/features/essentia/model/buildPlans.ts), [planner worker](src/features/essentia/worker/essentiaPlanner.worker.ts).
+
+## Screenshot recognition (beta)
+
+PNG and JPEG files up to 20 MB are decoded locally and downscaled to at most 2,400 pixels on the longest side. Recognition runs in a browser Web Worker; no screenshot is sent to an image-recognition service.
+
+1. HSV segmentation finds the parchment. Grayscale blur, Canny edges, and polygon contours locate candidate hexagons. A more sensitive pass runs if the first pass is unreliable.
+2. Hex size, spacing, center, and radius are estimated from the contours and parchment. Supported radii are 2–7.
+3. Aspect icons are matched against scaled templates with OpenCV `matchTemplate` (`TM_CCOEFF_NORMED`). Foreground pixels, hex outlines, and neighboring cells help classify aspect, empty, obstacle, or uncertain cells.
+4. The user can correct the radius and cell classifications before importing. Unresolved cells block import. The output matches the board input shape: `{ radius, cells: [{ row, column, type, aspect? }] }`.
+
+This is deterministic computer vision, not a trained model. Small, blurred, cropped, or heavily altered screenshots can fail recognition and require manual correction.
+
+Implementation: [recognition pipeline](src/features/research-map/recognition/recognizeScreenshot.ts), [preprocessing](src/features/research-map/recognition/preprocess.ts), [grid geometry](src/features/research-map/recognition/geometry.ts), [cell classification](src/features/research-map/recognition/classifyCells.ts).
+
+## Run locally
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-For a production build:
-
 ```bash
+pnpm test
+pnpm lint
 pnpm build
 ```
 
-Code style is checked with Biome. Run `pnpm lint` to check the project or `pnpm format` to format source files and organize imports. Generated catalogs and game assets are excluded.
+## Optional cloud sync
 
-## Cloud item preferences (Supabase)
+Run the [SQL migrations](supabase/migrations) in order in a Supabase project. The tables are in a private schema and are accessed only through server routes. Put these server-only variables in `.env.local` and in the deployment environment:
 
-Anonymous favorites and unavailable items continue to work in local storage. To enable accounts and cross-device sync:
-
-1. Create a Supabase project and run [`supabase/migrations/001_auth_favorites.sql`](supabase/migrations/001_auth_favorites.sql), [`supabase/migrations/002_recoverable_access_codes.sql`](supabase/migrations/002_recoverable_access_codes.sql), and [`supabase/migrations/003_unavailable_items.sql`](supabase/migrations/003_unavailable_items.sql) in order in its SQL editor. The tables live in a private schema and are accessed only by Next.js server routes.
-2. Set the server environment variables below locally in `.env.local` and in the deployment environment. Never prefix them with `NEXT_PUBLIC_`.
-3. Restart the server. Click the key icon in the header, then create an access code or enter an existing one. The account menu shows the code and lets you copy it while signed in. Existing accounts created before migration must confirm their code once to enable this view; signing in with the code also does this automatically.
-
-| Variable | Value |
+| Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Supabase **Session or Transaction pooler** PostgreSQL URI with a URL-encoded password and TLS verification (`sslmode=verify-full`). The Node `pg` pool uses one connection and unnamed parameterized queries. |
-| `DATABASE_CA_CERT_BASE64` | Base64-encoded contents of the **Server root certificate** downloaded from Supabase **Database Settings → SSL Configuration**. For example, `base64 -i /path/to/certificate.crt \| tr -d '\n'` on macOS. |
-| `AUTH_CODE_SECRET` | Stable, private, random secret of at least 32 characters, for example the output of `openssl rand -hex 32`. Changing it makes existing access codes unusable. |
-| `APP_ORIGIN` | Exact public origin, such as `https://thaumaspects.vercel.app`, with no trailing slash. Required in production for CSRF origin checks. Set to `http://localhost:3000` for local development when needed. |
+| `DATABASE_URL` | PostgreSQL pooler URI with a URL-encoded password and `sslmode=verify-full` |
+| `DATABASE_CA_CERT_BASE64` | Base64-encoded Supabase server root certificate |
+| `AUTH_CODE_SECRET` | Stable random secret, at least 32 characters; changing it invalidates existing access codes |
+| `APP_ORIGIN` | Exact public origin, for example `https://thaumaspects.vercel.app` |
 
-The sign-in code is the only account credential. Losing it **and** all signed-in sessions permanently loses access to that account. Server rate limits cover registration and login; no Supabase Auth account or additional service is needed. Account sessions last 30 days and can be used on several devices. The API stores an HMAC code digest plus an AES-GCM encrypted copy for signed-in recovery, and stores only session token hashes. Favorites are queried by the authenticated user's ID. Keep `AUTH_CODE_SECRET` stable and private: it is required both to validate and decrypt existing codes.
+Access codes are the account credential. The server stores a keyed code digest, an encrypted copy for signed-in recovery, and session-token hashes. Without a database, local item preferences still work.
 
-The first sign-in merges anonymous local favorites and unavailable items with the cloud account once. Existing signed-in browsers upload their saved unavailable items after this migration. Later visits use the cloud state, so an item restored on another device stays restored. Offline changes to both lists are queued locally and retried when connectivity returns. Progression tier remains a local setting.
+## Regenerate the item catalog
 
-TanStack Query keeps session, access code, and item preference responses in the current browser tab. The code is fetched once when restoring an account that is not already in the local recent-code list, or taken directly from a successful sign-in or registration response. The three most recently used unique access codes are stored unencrypted in this browser's `localStorage` until removed in the sign-in menu or cleared with browser data. Pending preference edits are sent in batches; the returned lists update the cache without a follow-up GET. A visible tab refreshes remote preferences when its cached data is older than one minute.
+```bash
+python3 scripts/build-oracle-catalog.py --data-274 /path/to/2.7.4/data.bin --data-280 /path/to/2.8.0-v5/data.bin --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards --download
+python3 scripts/build-acquisition-scores.py --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards
+```
 
-The GTNH item catalog is also cached for 30 minutes after leaving the planner, so switching between the map and planner does not download and prepare it again.
+Raw Oracle shards and Calculator binaries are build inputs and are not committed.
 
-## Attribution and license
+## Attribution
 
-The original [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) project is licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/). This project preserves the required attribution; the transferred aspect data, artwork, and core search logic originate from that repository. Additional GTNH aspect definitions and icons come from the [jimmon89/tcresearch GTNH fork](https://github.com/jimmon89/tcresearch), also under Creative Commons Attribution 4.0.
+Research aspect data and artwork derive from [ythri/tcresearch](https://github.com/ythri/tcresearch/tree/gh-pages) and the [jimmon89 GTNH fork](https://github.com/jimmon89/tcresearch), both under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Minecraft and mod textures belong to their respective creators.
