@@ -16,6 +16,7 @@ export function AspectIcon({ name }: { name: string }) {
       src={`/aspects/color/${name === 'strontio' ? 'stronito' : name}.png`}
       width={25}
       height={25}
+      unoptimized
       onError={() => setMissing(true)}
       alt=""
     />

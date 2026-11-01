@@ -42,6 +42,7 @@ export function ItemIcon({ item, large = false }: { item: ItemAspect; large?: bo
           src={`/api/atlas-icons/${icon.id}`}
           width={32}
           height={32}
+          unoptimized
           alt=""
         />
       ) : icon?.kind === 'rendered' ? (
@@ -50,6 +51,7 @@ export function ItemIcon({ item, large = false }: { item: ItemAspect; large?: bo
             src={`/gt-icons/rendered/${icon.file}`}
             width={sourceWidth}
             height={sourceHeight}
+            unoptimized
             style={renderedStyle}
             alt=""
           />

@@ -8,6 +8,7 @@ export function AspectIcon({ aspect, muted = false }: { aspect: string; muted?: 
       src={aspectIconUrl(aspect, muted)}
       width={26}
       height={26}
+      unoptimized
       alt=""
     />
   )
