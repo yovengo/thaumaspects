@@ -27,6 +27,16 @@ function isSupportedScreenshot(file: File) {
   )
 }
 
+function screenshotFromClipboard(clipboard: DataTransfer): File | null {
+  for (const item of clipboard.items) {
+    if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
+    const file = item.getAsFile()
+    if (file) return file
+  }
+
+  return [...clipboard.files].find((file) => file.type.startsWith('image/')) ?? null
+}
+
 async function readScreenshot(file: File): Promise<ImageData> {
   if (!isSupportedScreenshot(file)) {
     throw new Error('Choose a PNG or JPEG screenshot.')
@@ -206,7 +216,7 @@ export function ScreenshotImport({
       setError('Choose a PNG or JPEG screenshot smaller than 20 MB.')
       return
     }
-    runRef.current += 1
+    const run = ++runRef.current
     if (pendingRef.current) {
       pendingRef.current.cancel()
       pendingRef.current = null
@@ -222,11 +232,14 @@ export function ScreenshotImport({
     setImageUrl(imageUrlRef.current)
     try {
       const screenshot = await readScreenshot(file)
+      if (run !== runRef.current) return
       setImage(screenshot)
       await runRecognition(screenshot)
     } catch (cause) {
-      setBusy(false)
-      setError((cause as Error).message)
+      if (run === runRef.current) {
+        setBusy(false)
+        setError((cause as Error).message)
+      }
     }
   }
 
@@ -264,6 +277,12 @@ export function ScreenshotImport({
       className="screenshot-dialog"
       aria-labelledby="screenshot-dialog-title"
       onClose={onClose}
+      onPaste={(event) => {
+        const file = screenshotFromClipboard(event.clipboardData)
+        if (!file) return
+        event.preventDefault()
+        void chooseFile(file)
+      }}
     >
       <div className="screenshot-dialog-content">
         <header className="screenshot-header">
@@ -309,8 +328,8 @@ export function ScreenshotImport({
               void chooseFile(event.dataTransfer.files[0])
             }}
           >
-            <strong>Choose a screenshot</strong>
-            <span>PNG or JPEG · drag and drop also works</span>
+            <strong>Choose or paste a screenshot</strong>
+            <span>PNG or JPEG · Ctrl+V / ⌘V · drag and drop</span>
           </button>
         )}
 
