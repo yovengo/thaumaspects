@@ -2,7 +2,6 @@
 import argparse
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import glob
 import gzip
 import hashlib
 import json
@@ -12,6 +11,8 @@ import subprocess
 import sys
 import unicodedata
 from urllib.request import Request, urlopen
+
+from oracle_inputs import iter_oracle_recipes, load_oracle_inputs
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,41 +123,50 @@ def main():
     parser.add_argument('--resource-index', type=Path, required=True)
     parser.add_argument('--shards-dir', type=Path, required=True)
     parser.add_argument('--catalog', type=Path, default=ROOT / 'public/item-aspects-gtnh.json')
+    parser.add_argument('--expected-version', help='Require an exact GTNH release version')
     parser.add_argument('--download', action='store_true')
     args = parser.parse_args()
 
-    source = json.load(gzip.open(args.resource_index, 'rt'))
+    source, shard_paths = load_oracle_inputs(
+        args.resource_index, args.shards_dir, args.expected_version
+    )
     old = read_atlas_index(args.data_274)
     resource_by_id = {entry['id']: entry for entry in source['resources'] if entry['kind'] == 'item'}
     items = []
     aspects = set()
     remote_paths = set()
-    for shard_path in sorted(glob.glob(str(args.shards_dir / 'shard-*.json.gz'))):
-        for recipe in json.load(gzip.open(shard_path, 'rt'))['recipes']:
-            if recipe['kind'] != 'essentia_smelting':
+    for recipe in iter_oracle_recipes(source, shard_paths):
+        if recipe['kind'] != 'essentia_smelting':
+            continue
+        inputs = [entry for entry in recipe['inputs'] if entry['kind'] == 'item']
+        if len(inputs) != 1:
+            continue
+        source_item = inputs[0]
+        item_aspects = {}
+        for entry in recipe['outputs']:
+            if entry['kind'] != 'aspect' or entry['amount'] <= 0:
                 continue
-            inputs = [entry for entry in recipe['inputs'] if entry['kind'] == 'item']
-            if len(inputs) != 1:
-                continue
-            source_item = inputs[0]
-            item_aspects = {entry['id'].rsplit(':', 1)[-1]: int(entry['amount'])
-                            for entry in recipe['outputs'] if entry['kind'] == 'aspect' and entry['amount'] > 0}
-            if not item_aspects:
-                continue
-            aspects.update(item_aspects)
-            item_id = source_item['id']
-            icon_path = source_item.get('iconPath') or resource_by_id.get(item_id, {}).get('iconPath')
-            matches = [entry for entry in old.get(normalize(source_item['displayName']), [])
-                       if entry['mod'] == (source_item.get('modId') or item_id.split(':', 1)[0]).casefold()]
-            if len(matches) == 1:
-                icon = {'kind': 'atlas', 'id': matches[0]['id'], 'quality': 'exact'}
-            elif icon_path and icon_path.startswith('/') and icon_path.endswith('.png'):
-                icon = {'kind': 'rendered', 'file': file_name(icon_path), 'quality': 'exact'}
-                remote_paths.add(icon_path)
-            else:
-                icon = None
-            items.append({'name': source_item['displayName'], 'registryId': item_id,
-                          'aspects': item_aspects, **({'icon': icon} if icon else {})})
+            aspect = entry['id'].rsplit(':', 1)[-1]
+            item_aspects[aspect] = item_aspects.get(aspect, 0) + int(entry['amount'])
+        if not item_aspects:
+            continue
+        aspects.update(item_aspects)
+        item_id = source_item['id']
+        icon_path = source_item.get('iconPath') or resource_by_id.get(item_id, {}).get('iconPath')
+        matches = [entry for entry in old.get(normalize(source_item['displayName']), [])
+                   if entry['mod'] == (source_item.get('modId') or item_id.split(':', 1)[0]).casefold()]
+        if icon_path and icon_path.startswith('/') and icon_path.endswith('.png'):
+            icon = {'kind': 'rendered', 'file': file_name(icon_path), 'quality': 'exact'}
+            remote_paths.add(icon_path)
+        elif len(matches) == 1:
+            icon = {'kind': 'atlas', 'id': matches[0]['id'], 'quality': 'exact'}
+        else:
+            icon = None
+        items.append({'name': source_item['displayName'], 'registryId': item_id,
+                      'aspects': item_aspects, **({'icon': icon} if icon else {})})
+
+    if not items:
+        raise ValueError('Oracle export contains no essentia smelting profiles')
 
     ids = [item['registryId'] for item in items]
     if len(ids) != len(set(ids)):
@@ -177,11 +187,11 @@ def main():
                     and (resource.get('modId') or item_id.split(':', 1)[0]).casefold() == mod.casefold()):
                 icon_path = resource.get('iconPath')
                 matches = [entry for entry in old.get(normalize(name), []) if entry['mod'] == mod.casefold()]
-                if len(matches) == 1:
-                    icon = {'kind': 'atlas', 'id': matches[0]['id'], 'quality': 'exact'}
-                elif icon_path and icon_path.startswith('/') and icon_path.endswith('.png'):
+                if icon_path and icon_path.startswith('/') and icon_path.endswith('.png'):
                     icon = {'kind': 'rendered', 'file': file_name(icon_path), 'quality': 'exact'}
                     remote_paths.add(icon_path)
+                elif len(matches) == 1:
+                    icon = {'kind': 'atlas', 'id': matches[0]['id'], 'quality': 'exact'}
                 else:
                     icon = None
                 items.append({'name': resource['displayName'], 'registryId': item_id,
@@ -204,11 +214,6 @@ def main():
                          'fallbackCounts': dict(fallback_counts)},
         'iconSource': {'atlas': 'GTNH Calculator 2.7.4', 'rendered': source['gtnhVersion'], 'counts': dict(counts)},
     }
-    args.catalog.write_text(json.dumps(catalog, ensure_ascii=False, separators=(',', ':')) + '\n')
-    print(json.dumps({'items': len(items), 'unprofiledItems': len(unprofiled),
-                      'fallbackCounts': dict(fallback_counts),
-                      'aspects': len(aspects), 'renderedIcons': len(remote_paths)}, ensure_ascii=False))
-
     if args.download:
         output_dir = ROOT / 'public/gt-icons/rendered'
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -219,6 +224,11 @@ def main():
             for future in as_completed(futures):
                 future.result()
         subprocess.run([sys.executable, str(ROOT / 'scripts/build-rendered-icon-bounds.py')], check=True)
+
+    args.catalog.write_text(json.dumps(catalog, ensure_ascii=False, separators=(',', ':')) + '\n')
+    print(json.dumps({'items': len(items), 'unprofiledItems': len(unprofiled),
+                      'fallbackCounts': dict(fallback_counts),
+                      'aspects': len(aspects), 'renderedIcons': len(remote_paths)}, ensure_ascii=False))
 
 
 if __name__ == '__main__':

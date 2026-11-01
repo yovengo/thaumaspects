@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 from collections import defaultdict
-import glob
 import gzip
 import html
 import json
@@ -9,6 +8,8 @@ import math
 from pathlib import Path
 import re
 import unicodedata
+
+from oracle_inputs import iter_oracle_recipes, load_oracle_inputs
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,38 +38,37 @@ def resource_data(path):
     return data, usage, names, alternatives
 
 
-def read_recipes(directory):
+def read_recipes(source, shard_paths):
     recipes = []
     produced = set()
     world_sources = set()
-    for path in sorted(glob.glob(str(directory / 'shard-*.json.gz'))):
-        for row in json.load(gzip.open(path, 'rt'))['recipes']:
-            if row['kind'] in ('ore_vein', 'small_ore'):
-                world_sources.update(item['id'] for item in row.get('outputs', []) if item.get('kind') == 'item')
-            if row['kind'] not in ('gregtech_machine', 'crop_produce') or not row.get('inputs') or not row.get('outputs'):
+    for row in iter_oracle_recipes(source, shard_paths):
+        if row['kind'] in ('ore_vein', 'small_ore'):
+            world_sources.update(item['id'] for item in row.get('outputs', []) if item.get('kind') == 'item')
+        if row['kind'] not in ('gregtech_machine', 'crop_produce') or not row.get('inputs') or not row.get('outputs'):
+            continue
+        tier = TIERS.index(row['minimumTier']) if row.get('minimumTier') in TIERS else len(TIERS) - 1
+        inputs = []
+        for ingredient in row['inputs']:
+            if ingredient['kind'] not in ('item', 'fluid'):
+                inputs = []
+                break
+            if ingredient['id'].startswith('oredict:craftingTool'):
                 continue
-            tier = TIERS.index(row['minimumTier']) if row.get('minimumTier') in TIERS else len(TIERS) - 1
-            inputs = []
-            for ingredient in row['inputs']:
-                if ingredient['kind'] not in ('item', 'fluid'):
-                    inputs = []
-                    break
-                if ingredient['id'].startswith('oredict:craftingTool'):
-                    continue
-                if ingredient.get('consumed') is False and row['kind'] != 'crop_produce':
-                    continue
-                amount = float(ingredient.get('amount', 1)) / (1000 if ingredient['kind'] == 'fluid' else 1)
-                if ingredient.get('consumed') is False:
-                    amount /= 8
-                inputs.append((ingredient['id'], amount))
-            if not inputs:
+            if ingredient.get('consumed') is False and row['kind'] != 'crop_produce':
                 continue
-            outputs = [(item['id'], float(item.get('amount', 1)) * float(item.get('chance', 1)))
-                       for item in row['outputs'] if item['kind'] in ('item', 'fluid') and item.get('amount', 1) > 0]
-            if not outputs:
-                continue
-            recipes.append((tier, inputs, outputs, row['kind'] == 'crop_produce'))
-            produced.update(item_id for item_id, _ in outputs)
+            amount = float(ingredient.get('amount', 1)) / (1000 if ingredient['kind'] == 'fluid' else 1)
+            if ingredient.get('consumed') is False:
+                amount /= 8
+            inputs.append((ingredient['id'], amount))
+        if not inputs:
+            continue
+        outputs = [(item['id'], float(item.get('amount', 1)) * float(item.get('chance', 1)))
+                   for item in row['outputs'] if item['kind'] in ('item', 'fluid') and item.get('amount', 1) > 0]
+        if not outputs:
+            continue
+        recipes.append((tier, inputs, outputs, row['kind'] == 'crop_produce'))
+        produced.update(item_id for item_id, _ in outputs)
     return recipes, produced, world_sources
 
 
@@ -121,10 +121,17 @@ def main():
     parser.add_argument('--resource-index', type=Path, required=True)
     parser.add_argument('--shards-dir', type=Path, required=True)
     parser.add_argument('--catalog', type=Path, default=ROOT / 'public/item-aspects-gtnh.json')
+    parser.add_argument('--expected-version', help='Require an exact GTNH release version')
     args = parser.parse_args()
-    metadata, usage, names, alternatives = resource_data(args.resource_index)
-    recipes, produced, world_sources = read_recipes(args.shards_dir)
+    metadata, shard_paths = load_oracle_inputs(
+        args.resource_index, args.shards_dir, args.expected_version
+    )
+    _, usage, names, alternatives = resource_data(args.resource_index)
+    recipes, produced, world_sources = read_recipes(metadata, shard_paths)
     catalog = json.loads(args.catalog.read_text())
+    aspect_source = catalog.get('aspectSource', {})
+    if aspect_source.get('datasetVersionId') != metadata['datasetVersionId']:
+        raise ValueError('Catalog and acquisition recipes come from different Oracle datasets')
 
     scores = {}
     depths = {}
