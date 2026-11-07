@@ -187,29 +187,6 @@
   background: var(--surface3);
 }
 
-.ess-stage-control {
-  display: grid;
-  gap: 6px;
-  margin-top: 19px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.ess-stage-control select {
-  height: 44px;
-  padding: 0 10px;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.ess-stage-control small {
-  color: var(--faint);
-  font-size: 10px;
-  font-weight: 400;
-}
-
 @media (max-width: 520px) {
   .ess-requirements {
     padding: 16px;
@@ -264,13 +241,6 @@
 
 .ess-aspect-field > span,
 .ess-amount > span,
-.ess-stage-control > span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
 .ess-picker-trigger,
 .ess-amount input {
   height: 46px;
@@ -321,25 +291,6 @@
   background: transparent;
 }
 
-.ess-stage-control {
-  position: relative;
-  z-index: 5;
-  display: grid;
-  gap: 7px;
-  margin-top: 0;
-  padding: 16px;
-  border: 1px solid var(--edge);
-  border-radius: 11px;
-  background: var(--surface2);
-}
-
-.ess-stage-control small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 @media (max-width: 900px) {
   .ess-compose {
     grid-template-columns: minmax(0, 1fr) 210px;
@@ -349,9 +300,6 @@
 @media (max-width: 730px) {
   .ess-compose {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .ess-stage-control {
-    max-width: none;
   }
 }
 
@@ -471,17 +419,6 @@
   height: 40px;
 }
 
-.ess-stage-control {
-  margin-top: 16px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.ess-stage-control small {
-  margin-top: 0;
-}
-
 @media (max-width: 930px) {
   .ess-row {
     grid-template-columns: minmax(90px, 1fr) 126px 38px;
@@ -537,62 +474,6 @@
   align-self: end;
 }
 
-.ess-advanced {
-  position: relative;
-  z-index: 5;
-  margin-top: 15px;
-  border-top: 1px solid var(--edge);
-}
-
-.ess-advanced summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 37px;
-  list-style: none;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ess-advanced summary::-webkit-details-marker {
-  display: none;
-}
-
-.ess-advanced summary:hover {
-  color: var(--gold2);
-}
-
-.ess-advanced summary > span:last-child {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--faint);
-  font-weight: 600;
-}
-
-.ess-advanced summary > span.is-active {
-  color: var(--gold2);
-}
-
-.ess-advanced .field-chevron {
-  width: 15px;
-  height: 15px;
-  flex-basis: 15px;
-  color: currentColor;
-}
-
-.ess-advanced[open] summary .field-chevron {
-  transform: rotate(180deg);
-}
-
-.ess-advanced .ess-stage-control {
-  margin-top: 8px;
-  margin-bottom: 6px;
-}
-
 @media (max-width: 930px) {
   .ess-row {
     grid-template-columns: minmax(90px, 1fr) 126px 46px;
@@ -629,16 +510,9 @@
   margin-bottom: 0;
 }
 
-.ess-advanced {
-  margin-top: auto;
-}
-
 @media (max-width: 730px) {
   .ess-compose {
     display: flex;
-  }
-  .ess-advanced {
-    margin-top: 18px;
   }
 }
 

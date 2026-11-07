@@ -101,16 +101,6 @@
   font-size: 11px;
 }
 
-.ess-aspect-source {
-  width: fit-content;
-  padding: 2px 5px;
-  border: 1px solid #80765b;
-  border-radius: 4px;
-  color: var(--gold2) !important;
-  background: #353039;
-  font-size: 10px !important;
-}
-
 .ess-item-tools {
   display: grid;
   justify-items: end;
@@ -158,11 +148,6 @@
   min-width: 22px;
   text-align: center;
   font-size: 12px;
-}
-
-.ess-source-note {
-  color: var(--muted);
-  font-size: 11px;
 }
 
 .ess-progress-list {

@@ -44,14 +44,6 @@ export function CatalogItem({
         <div className="ess-catalog-name">
           <strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>
           {variantLabels.has(key) && <small>{variantLabels.get(key)}</small>}
-          {item.aspectVersion && (
-            <small
-              className="ess-aspect-source"
-              title="Aspect profile comes from an earlier GTNH release and is unverified in 2.9"
-            >
-              GTNH {item.aspectVersion}
-            </small>
-          )}
           {item.registryId && (
             <small title={item.registryId}>{item.registryId.split(':')[0]}</small>
           )}

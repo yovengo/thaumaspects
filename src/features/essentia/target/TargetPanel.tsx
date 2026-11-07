@@ -1,9 +1,6 @@
 'use client'
 
-import { stages } from '@/features/essentia/availability/stages'
 import { aspectLabel } from '@/features/essentia/shared/format'
-import { Chevron } from '@/features/essentia/shared/icons'
-import { SelectField } from '@/features/essentia/shared/SelectField'
 import type { useEssentiaPlanner } from '@/features/essentia/state/useEssentiaPlanner'
 import { AspectPicker } from '@/features/essentia/target/AspectPicker'
 
@@ -21,8 +18,6 @@ export function TargetPanel({
     changeAmount,
     removeRow,
     addRow,
-    availability,
-    setAvailability,
   } = controller
   return (
     <div className="panel ess-requirements">
@@ -127,25 +122,6 @@ export function TargetPanel({
             </button>
           )}
         </div>
-        <details className="ess-advanced">
-          <summary>
-            <span>Availability</span>
-            <span className={availability.stage !== 'NONE' ? 'is-active' : ''}>
-              {availability.stage === 'NONE'
-                ? 'Basic'
-                : stages.find(([value]) => value === availability.stage)?.[1]}{' '}
-              <Chevron />
-            </span>
-          </summary>
-          <div className="ess-stage-control">
-            <SelectField
-              label="Progression tier"
-              value={availability.stage}
-              options={stages}
-              onChange={(stage) => setAvailability((previous) => ({ ...previous, stage }))}
-            />
-          </div>
-        </details>
       </div>
     </div>
   )

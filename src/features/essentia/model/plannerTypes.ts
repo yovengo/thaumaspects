@@ -1,13 +1,10 @@
-export type ItemIconData =
-  | { kind: 'atlas'; id: number; quality: 'exact' | 'ambiguous' | 'related' | 'generic' }
-  | { kind: 'rendered'; file: string; quality: 'exact' | 'ambiguous' }
+export type ItemIconData = { kind: 'remote'; url: string; quality: 'exact' }
 export type ItemAspect = {
   name: string
   aspects: Record<string, number>
   icon?: ItemIconData
   registryId?: string
-  aspectVersion?: string
-  acquisition?: Record<string, [number, number]>
+  sourceClass?: string
 }
 export type Requirement = Record<string, number>
 export type PlanLine = { item: ItemAspect; count: number }

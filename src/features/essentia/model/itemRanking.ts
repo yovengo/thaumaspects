@@ -1,23 +1,35 @@
 import type { ItemAspect, PlannerPreferences } from './plannerTypes.ts'
 
-const effortCache = new WeakMap<ItemAspect, Map<string, number>>()
+const effortCache = new WeakMap<ItemAspect, number>()
 const keyCache = new WeakMap<ItemAspect, string>()
 
-export function itemEffort(item: ItemAspect, preferences: PlannerPreferences = {}) {
-  if (preferences.preferred?.size && preferences.preferred.has(key(item))) return 0.15
-  const stage = preferences.stage ?? 'NONE'
-  const cached = effortCache.get(item)?.get(stage)
+function sourceEffort(item: ItemAspect): number {
+  const cached = effortCache.get(item)
   if (cached !== undefined) return cached
-  const acquisition = item.acquisition?.[stage]
-  const recipeScore = acquisition?.[0]
-  if (recipeScore === undefined && item.acquisition) return 1000
-  const concentration = Math.max(0, Math.max(...Object.values(item.aspects)) - 2)
-  const effort =
-    Math.max(0.15, recipeScore ?? 20) + (acquisition?.[1] ?? 0) * 4 + concentration * 1.5
-  const scores = effortCache.get(item) ?? new Map<string, number>()
-  scores.set(stage, effort)
-  effortCache.set(item, scores)
+
+  const totalAspects = Object.values(item.aspects).reduce((sum, amount) => sum + amount, 0)
+  const minecraft = item.registryId?.startsWith('minecraft:') ?? false
+  const itemClass = item.sourceClass ?? ''
+  const simpleItem =
+    /Item(?:Resin|Crop|Seed|Berry|Fruit|Sapling|Reed)$/.test(itemClass) ||
+    (minecraft && !/(?:ItemBlock|ItemPiston|ItemColored|ItemDoublePlant|DoorItem)$/.test(itemClass))
+  let effort = simpleItem ? 1 + 0.18 * totalAspects ** 1.35 : 12 + 0.55 * totalAspects ** 1.45
+
+  if (/Item(?:Potion|EnchantedBook|Record|Armor|Sword|Tool|Bow)/.test(itemClass)) effort += 40
+  if (item.registryId?.includes('#')) effort += 40
+  if (simpleItem && itemClass.endsWith('ItemReed')) effort *= 0.8
+  if (simpleItem) {
+    const metadata = Number(item.registryId?.match(/@(\d+)/)?.[1] ?? 0)
+    effort += Math.min(8, metadata) * 0.4
+  }
+
+  effortCache.set(item, effort)
   return effort
+}
+
+export function itemEffort(item: ItemAspect, preferences: PlannerPreferences = {}) {
+  const effort = sourceEffort(item)
+  return preferences.preferred?.has(key(item)) ? effort * 0.65 : effort
 }
 
 export const itemSimplicity = (item: ItemAspect, preferences: PlannerPreferences = {}) =>
@@ -26,10 +38,12 @@ export const itemSimplicity = (item: ItemAspect, preferences: PlannerPreferences
 export function key(item: ItemAspect) {
   const cached = keyCache.get(item)
   if (cached !== undefined) return cached
-  const value = `${item.registryId ?? item.name}|${Object.entries(item.aspects)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([aspect, amount]) => `${aspect}:${amount}`)
-    .join(',')}`
+  const value = item.registryId
+    ? `gtnh:2.9.0:${item.registryId}`
+    : `${item.name}|${Object.entries(item.aspects)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([aspect, amount]) => `${aspect}:${amount}`)
+        .join(',')}`
   keyCache.set(item, value)
   return value
 }

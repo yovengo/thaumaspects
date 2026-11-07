@@ -11,7 +11,6 @@ type CatalogViewInput = {
   sourcesOpen: boolean
   sourcesFilter: 'favorite' | 'excluded'
   sourcesQuery: string
-  query: string
   catalogOpen: boolean
   sourcePickerOpen: boolean
   workerFailed: boolean
@@ -28,7 +27,6 @@ export function useCatalogView({
   sourcesOpen,
   sourcesFilter,
   sourcesQuery,
-  query,
   catalogOpen,
   sourcePickerOpen,
   workerFailed,
@@ -93,21 +91,6 @@ export function useCatalogView({
     () => (catalog ? (sourceResult?.indices.map((index) => catalog.items[index]) ?? []) : []),
     [catalog, sourceResult],
   )
-  const unprofiledMatches = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase()
-    if (!catalog?.unprofiledItems || normalized.length < 2) return []
-    return catalog.unprofiledItems
-      .filter((item) =>
-        `${displayItemName(item.name)} ${item.registryId}`.toLocaleLowerCase().includes(normalized),
-      )
-      .sort(
-        (a, b) =>
-          Number(displayItemName(b.name).toLocaleLowerCase() === normalized) -
-            Number(displayItemName(a.name).toLocaleLowerCase() === normalized) ||
-          a.name.localeCompare(b.name),
-      )
-  }, [catalog, query])
-
   const matchesShown = filteredItems.slice(0, visibleCount)
   return {
     managedSources,
@@ -116,7 +99,6 @@ export function useCatalogView({
     sourceSearching,
     filteredItems,
     sourceMatches,
-    unprofiledMatches,
     matchesShown,
   }
 }

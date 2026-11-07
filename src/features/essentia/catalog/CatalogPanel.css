@@ -296,7 +296,6 @@
   font-size: 12px;
 }
 
-.ess-unprofiled,
 .ess-data-note {
   margin-top: 18px;
   padding: 12px;
@@ -308,28 +307,14 @@
   line-height: 1.5;
 }
 
-.ess-unprofiled summary,
 .ess-data-note summary {
   color: var(--gold2);
   font-weight: 800;
   cursor: pointer;
 }
 
-.ess-unprofiled p,
 .ess-data-note p {
   margin: 10px 0 0;
-}
-
-.ess-unprofiled-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  padding: 8px 0;
-  border-top: 1px solid var(--edge);
-}
-
-.ess-data-note a {
-  color: var(--gold2);
 }
 
 @media (max-width: 520px) {

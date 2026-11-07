@@ -1,13 +1,14 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useItemAvailability } from '@/features/essentia/availability/useItemAvailability'
 import { useCatalogView } from '@/features/essentia/catalog/useCatalogView'
+import { loadGtnhCatalog } from '@/features/essentia/dataset/loadGtnhCatalog'
+import { migratePreferences } from '@/features/essentia/dataset/migratePreferences'
 import { countForItem } from '@/features/essentia/model/itemQuantity'
 import type { ItemAspect, Requirement } from '@/features/essentia/model/planner'
-import { key as itemKey, planFromLines, prepareItems } from '@/features/essentia/model/planner'
-import type { Catalog } from '@/features/essentia/model/types'
+import { key as itemKey, planFromLines } from '@/features/essentia/model/planner'
 import { scrollBehavior } from '@/features/essentia/shared/format'
 import { usePlannerSession } from '@/features/essentia/state/usePlannerSession'
 import { useTargetRows } from '@/features/essentia/target/useTargetRows'
@@ -51,27 +52,49 @@ export function useEssentiaPlanner() {
     setExpandedItems,
   } = session
   const catalogQuery = useQuery({
-    queryKey: ['catalog', 'gtnh-2.9.0-beta-2'],
-    queryFn: async ({ signal }): Promise<Catalog> => {
-      const response = await fetch('/item-aspects-gtnh.json', { signal })
-      if (!response.ok) throw new Error('Catalog unavailable')
-      const data = (await response.json()) as Catalog
-      return { ...data, items: prepareItems(data.items) }
-    },
+    queryKey: ['catalog', 'gtnh-2.9.0'],
+    queryFn: ({ signal }) => loadGtnhCatalog(signal),
     staleTime: Infinity,
-    gcTime: 30 * 60_000,
+    gcTime: Infinity,
     refetchOnReconnect: false,
   })
   const catalog = catalogQuery.data ?? null
   const loadError = catalogQuery.isError
+  const itemsById = useMemo(
+    () => new Map(catalog?.items.map((item) => [item.registryId, item]) ?? []),
+    [catalog],
+  )
   const {
-    availability,
+    availability: storedAvailability,
     setAvailability,
     preferItem,
     excludeItem,
     restoreItem,
     removeManagedSource,
   } = useItemAvailability()
+  const availability = useMemo(
+    () => (catalog ? migratePreferences(storedAvailability, catalog.items) : storedAvailability),
+    [catalog, storedAvailability],
+  )
+  useEffect(() => {
+    if (
+      availability.preferred.join('\0') !== storedAvailability.preferred.join('\0') ||
+      availability.excluded.join('\0') !== storedAvailability.excluded.join('\0')
+    )
+      setAvailability(availability)
+  }, [availability, storedAvailability, setAvailability])
+
+  useEffect(() => {
+    if (!catalog || customLines.length === 0) return
+    const updated = customLines
+      .map((line) => ({ ...line, item: itemsById.get(line.item.registryId) }))
+      .filter((line): line is { item: ItemAspect; count: number } => Boolean(line.item))
+    if (
+      updated.length !== customLines.length ||
+      updated.some((line, index) => line.item !== customLines[index].item)
+    )
+      setCustomLines(updated)
+  }, [catalog, customLines, itemsById, setCustomLines])
   const resultRef = useRef<HTMLDivElement>(null)
   const sourceSearchRef = useRef<HTMLInputElement>(null)
   const catalogSearchRef = useRef<HTMLInputElement>(null)
@@ -129,7 +152,6 @@ export function useEssentiaPlanner() {
     sourceSearching,
     filteredItems,
     sourceMatches,
-    unprofiledMatches,
     matchesShown,
   } = useCatalogView({
     catalog,
@@ -137,7 +159,6 @@ export function useEssentiaPlanner() {
     sourcesOpen,
     sourcesFilter,
     sourcesQuery,
-    query,
     catalogOpen,
     sourcePickerOpen,
     workerFailed,
@@ -233,8 +254,6 @@ export function useEssentiaPlanner() {
       changeAmount,
       removeRow,
       addRow,
-      availability,
-      setAvailability,
     },
     furnace: {
       calculating,
@@ -244,6 +263,7 @@ export function useEssentiaPlanner() {
       refining,
       catalog,
       loadError,
+      retryCatalog: () => void catalogQuery.refetch(),
       requestedAspects,
       workerFailed,
       planResult,
@@ -298,7 +318,6 @@ export function useEssentiaPlanner() {
       matchesShown,
       requestedAspects,
       visibleCount,
-      unprofiledMatches,
       catalogRef,
       required,
       catalogNeeded,

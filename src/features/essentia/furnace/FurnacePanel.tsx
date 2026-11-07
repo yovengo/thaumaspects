@@ -18,6 +18,7 @@ export function FurnacePanel({
     refining,
     catalog,
     loadError,
+    retryCatalog,
     requestedAspects,
     workerFailed,
     planResult,
@@ -46,7 +47,12 @@ export function FurnacePanel({
         <div className="ess-state">Loading item catalog…</div>
       )}
       {loadError && (
-        <div className="ess-state">Could not load the catalog. Please refresh the page.</div>
+        <div className="ess-state">
+          Could not load the GTNH catalog.{' '}
+          <button type="button" onClick={retryCatalog}>
+            Retry
+          </button>
+        </div>
       )}
       {workerFailed && (
         <div className="ess-state">Calculation unavailable. Please refresh the page.</div>

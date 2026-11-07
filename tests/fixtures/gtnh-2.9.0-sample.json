@@ -1,0 +1,155 @@
+[
+  {
+    "aspects": {
+      "instrumentum": 33
+    },
+    "iconPath": "icons/2bcd67b7e5c9c21ea394260c08eb2d9fa929f6b3411c9b77030906219767d350.png",
+    "iconStatus": "rendered",
+    "id": "Avaritia:Infinity_Axe@0",
+    "metadata": 0,
+    "name": "Nature's Ruin",
+    "registryName": "Avaritia:Infinity_Axe",
+    "smeltability": "unknown",
+    "sourceClass": "fox.spiteful.avaritia.items.tools.ItemAxeInfinity"
+  },
+  {
+    "aspects": {
+      "limus": 2,
+      "motus": 2
+    },
+    "iconPath": "icons/1be01775ab707655ac979eb7d4d9ef87fc6e67f99b5c1b8307fb0e48cf9b0c3a.png",
+    "iconStatus": "rendered",
+    "id": "IC2:itemHarz@0",
+    "metadata": 0,
+    "name": "Sticky Resin",
+    "registryName": "IC2:itemHarz",
+    "smeltability": "unknown",
+    "sourceClass": "ic2.core.item.ItemResin"
+  },
+  {
+    "aspects": {
+      "ignis": 2,
+      "potentia": 2
+    },
+    "iconPath": "icons/0f3d0920f013cb32ce80a1d78944595cbfbfa2109e945aa3f96372b02952126f.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:coal@0",
+    "metadata": 0,
+    "name": "Coal",
+    "registryName": "minecraft:coal",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemCoal"
+  },
+  {
+    "aspects": {
+      "ignis": 2,
+      "potentia": 2
+    },
+    "iconPath": "icons/c0fdd644924ee2d8263e33cb1d8e9e47ccb3ec2203e39df7801d905d334c3539.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:coal@1",
+    "metadata": 1,
+    "name": "Charcoal",
+    "registryName": "minecraft:coal",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemCoal"
+  },
+  {
+    "aspects": {
+      "ignis": 13,
+      "potentia": 13
+    },
+    "iconPath": "icons/5b460fa01eed1af2fc010c510ba2a79261f9175025fce6b1925c3a83f5a091e4.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:coal_block@0",
+    "metadata": 0,
+    "name": "Block of Coal",
+    "registryName": "minecraft:coal_block",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemBlock"
+  },
+  {
+    "aspects": {
+      "terra": 2
+    },
+    "iconPath": "icons/2e3f3c3038e7fa1e2b91c043c0e236f3b770ba43402693a82923960dd3109be9.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:dirt@0",
+    "metadata": 0,
+    "name": "Dirt",
+    "registryName": "minecraft:dirt",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemMultiTexture"
+  },
+  {
+    "aspects": {
+      "aer": 1,
+      "volatus": 2
+    },
+    "iconPath": "icons/330c48694ad0cd82d2290c8789a6ce37dc9cd9d78579d38f03e63a8d7d31a477.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:feather@0",
+    "metadata": 0,
+    "name": "Feather",
+    "registryName": "minecraft:feather",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.Item"
+  },
+  {
+    "aspects": {
+      "instrumentum": 1,
+      "terra": 1
+    },
+    "iconPath": "icons/46e0e0904a62e52118f6387fda7d6345a56ce7ded238d17e907fc912c203c386.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:flint@0",
+    "metadata": 0,
+    "name": "Flint",
+    "registryName": "minecraft:flint",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.Item"
+  },
+  {
+    "aspects": {
+      "machina": 1,
+      "potentia": 2
+    },
+    "iconPath": "icons/c9a190c77f789485376a1b89f7f686cb2611000321004ae279e9c7dd0806dad0.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:redstone@0",
+    "metadata": 0,
+    "name": "Redstone Dust",
+    "registryName": "minecraft:redstone",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemRedstone"
+  },
+  {
+    "aspects": {
+      "aer": 1,
+      "aqua": 1,
+      "herba": 1
+    },
+    "iconPath": "icons/6215fa427d9fdfa08c76eeaced3bad976924e4c8b34a5b57f76ff703f81bda58.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:reeds@0",
+    "metadata": 0,
+    "name": "Sugar Canes",
+    "registryName": "minecraft:reeds",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemReed"
+  },
+  {
+    "aspects": {
+      "aer": 1,
+      "herba": 1
+    },
+    "iconPath": "icons/4c67086cfc3deb33053fe6b3e3c82b817dded2d34944fcaacc97fb8b667364b5.png",
+    "iconStatus": "rendered",
+    "id": "minecraft:tallgrass@2",
+    "metadata": 2,
+    "name": "Fern",
+    "registryName": "minecraft:tallgrass",
+    "smeltability": "unknown",
+    "sourceClass": "net.minecraft.item.ItemColored"
+  }
+]

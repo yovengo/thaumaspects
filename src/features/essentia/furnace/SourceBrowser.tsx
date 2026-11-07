@@ -89,7 +89,6 @@ export function SourceBrowser({
                           .filter(([aspect]) => required[aspect])
                           .map(([aspect, amount]) => `${aspectLabel(aspect)} ${amount}`)
                           .join(' · ')}
-                        {item.aspectVersion ? ` · GTNH ${item.aspectVersion}` : ''}
                       </small>
                     </div>
                     <button

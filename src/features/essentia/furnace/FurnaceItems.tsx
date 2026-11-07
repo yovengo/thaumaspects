@@ -46,14 +46,6 @@ export function FurnaceItems({
               <ItemIcon item={item} large />
               <div className="ess-picked-item-details">
                 <strong title={displayItemName(item.name)}>{displayItemName(item.name)}</strong>
-                {item.aspectVersion && (
-                  <small
-                    className="ess-aspect-source"
-                    title="Aspect profile comes from an earlier GTNH release and is unverified in 2.9"
-                  >
-                    GTNH {item.aspectVersion}
-                  </small>
-                )}
                 <div className="ess-picked-aspects">
                   {(expanded ? aspectEntries : aspectEntries.slice(0, 6)).map(
                     ([aspect, amount]) => (
@@ -104,9 +96,6 @@ export function FurnaceItems({
           )
         })}
       </div>
-      {selected.lines.some(({ item }) => item.aspectVersion) && (
-        <p className="ess-source-note">GTNH 2.8 aspect values · unverified in 2.9</p>
-      )}
     </div>
   )
 }

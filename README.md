@@ -21,17 +21,18 @@ Routes: `/` for Research Map, `/essentia` for Essentia Planner.
 | Async state and forms | TanStack Query, React Hook Form |
 | Compute | Web Workers for board solving, planner search, and screenshot recognition |
 | Computer vision | OpenCV.js; image processing and template matching in the browser |
-| Storage | Static GTNH catalog; optional PostgreSQL on Supabase for accounts and preferences |
+| Storage | Cloudflare R2 item profiles and icons; optional PostgreSQL on Supabase for accounts and preferences |
 | Tooling | pnpm, Biome, Node test runner, Vercel Analytics |
 
 ## Data
 
 - **Research graph:** 69 GTNH aspects, including addon aspects. Every compound connects to both recipe ingredients.
-- **Furnace catalog:** 28,006 aspect profiles. 24,066 come from the [GTNH Planner 2.9.0-beta-2 Oracle export](https://github.com/Samiracle64/gtnh-factory-flow); 3,940 are [GTNH Calculator 2.8.0-v5](https://github.com/ShadowTheAge/gtnh-data/tree/2.8.0-v5) fallbacks. A fallback is used only when its registry ID, mod, and normalized name match an item in 2.9 that has no aspect profile. The 2.9 profile takes precedence. Each fallback keeps its source-version label.
-- **Coverage index:** 38,097 additional registry items have no aspect profile. They are not treated as furnace sources. Aspect values are never inferred from item names or recipes.
-- **Acquisition data:** the 2.9 export indexes 246,983 recipes. Stage-dependent source scores use its machine recipes and crop produce; world sources come from ore entries. Item icons come from exact rendered 2.9 assets or uniquely matched tiles in the [GTNH Calculator 2.7.4 atlas](https://github.com/ShadowTheAge/gtnh-2.7.4).
+- **GTNH 2.9.0 profiles:** 76,825 aspect-bearing item variants from the [immutable R2 snapshot](https://pub-9e5f1e92c9c34b2f8e16025b7fee2c1c.r2.dev/gtnh/2.9.0/20261107-050238-8e0e20e6/prepared/package-manifest.json). This is the planner's sole item source. Each variant keeps its exact registry ID and exact rendered icon when available. The export marks furnace acceptance as unknown; the planner includes every positive-aspect profile.
+- **Item types:** the same export provides item class names used in the practical-source estimate. The site ships no local item catalog or item icons. Old favorite and unavailable keys migrate to stable GTNH 2.9.0 variant keys when a matching item exists. Unmatched saved keys remain stored so they are not silently lost.
 
-The generated catalog lives in `public/item-aspects-gtnh.json`. It is shipped with the app, not queried from Supabase.
+The catalog, manifest, and item types are fetched and parsed in a Web Worker. Recommendations and catalog searches run in another worker. The browser loads icons lazily from R2. In local development, a development-only route proxies the catalog files to avoid CORS configuration for `localhost`.
+
+Set `NEXT_PUBLIC_GT_DATASET_BASE_URL` to another immutable snapshot directory URL and rebuild to change the source. The public host must permit cross-origin GET requests from the deployed site. This variable is embedded at build time.
 
 ## Research Map algorithms
 
@@ -47,14 +48,14 @@ Implementation: [aspect costs](src/features/research-map/model/aspectCosts.ts), 
 
 The target is a vector of required aspect amounts. Each catalog item contributes its full aspect vector, so a plan can combine different items for different requirements.
 
-- **Source effort:** derived from stage-filtered acquisition scores, recipe depth, and aspect concentration. Favorites receive a low effort score; unavailable items are excluded. Acquisition scores are built by relaxing the machine-recipe and crop graph. They do not model every ordinary crafting recipe, world rarity, or the player's inventory.
-- **Practical mix:** candidate pool includes, for each requested aspect, the 40 lowest-effort and 40 best yield-adjusted sources, plus matching favorites. Three greedy aspect orders provide initial plans. A bounded beam search then explores item quantities `1`, `floor(remaining / yield)`, and `ceil(remaining / yield)`. It scores acquisition effort, unwanted essentia, and additional item types; equivalent remaining states are deduplicated and a lower bound guides the beam.
+- **Source effort:** estimates simplicity from the exported item class and aspect concentration. Ordinary base-game items and raw material classes start cheaper than complex blocks or modded items; NBT variants, potions, and equipment receive a penalty. Favorites receive a discount and unavailable items are excluded. The current export does not contain reliable world-source or progression data, so the old tier control is hidden.
+- **Practical mix:** candidate pool includes, for each requested aspect, the 40 lowest-effort and 40 best yield-adjusted sources, plus matching favorites. Three greedy aspect orders provide initial plans. A bounded beam search then explores item quantities `1`, `floor(remaining / yield)`, and `ceil(remaining / yield)`. It scores estimated source effort, unwanted essentia, and additional item types; equivalent remaining states are deduplicated and a lower bound guides the beam.
 - **Alternatives:** separate construction passes produce mixes such as fewest items and less excess essentia. The catalog exposes all matching sources, including those outside the search shortlist; a manual mix can replace the recommendation.
 - **Performance:** the catalog and results are cached, search runs in a Web Worker, and a favorite-only preview can be shown before the full search completes.
 
 The beam keeps 80 states for up to four requested aspects, otherwise 32, for at most 20 expansion rounds. Recommendations are heuristic; they are not guaranteed global optima or promises that an item is obtainable at a selected tier.
 
-Implementation: [acquisition ranking](src/features/essentia/model/itemRanking.ts), [practical search](src/features/essentia/model/practicalSearch.ts), [plan assembly](src/features/essentia/model/buildPlans.ts), [planner worker](src/features/essentia/worker/essentiaPlanner.worker.ts).
+Implementation: [source ranking](src/features/essentia/model/itemRanking.ts), [practical search](src/features/essentia/model/practicalSearch.ts), [plan assembly](src/features/essentia/model/buildPlans.ts), [planner worker](src/features/essentia/worker/essentiaPlanner.worker.ts).
 
 ## Screenshot recognition (beta)
 
@@ -95,14 +96,7 @@ Run the [SQL migrations](supabase/migrations) in order in a Supabase project. Th
 
 Access codes are the account credential. The server stores a keyed code digest, an encrypted copy for signed-in recovery, and session-token hashes. Without a database, local item preferences still work.
 
-## Regenerate the item catalog
-
-```bash
-python3 scripts/build-oracle-catalog.py --data-274 /path/to/2.7.4/data.bin --data-280 /path/to/2.8.0-v5/data.bin --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards --download
-python3 scripts/build-acquisition-scores.py --resource-index /path/to/resource-index.json.gz --shards-dir /path/to/recipe-shards
-```
-
-Raw Oracle shards and Calculator binaries are build inputs and are not committed.
+The `scripts/` directory contains the previous Oracle and icon generation tools. They are not part of the active catalog loading path.
 
 ## Attribution
 

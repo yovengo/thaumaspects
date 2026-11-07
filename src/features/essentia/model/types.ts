@@ -5,15 +5,10 @@ import type {
   Requirement,
 } from '@/features/essentia/model/plannerTypes'
 
-export type UnprofiledItem = { name: string; registryId: string }
-
 export type Catalog = {
   aspects: string[]
   items: ItemAspect[]
-  unprofiledItems?: UnprofiledItem[]
-  aspectSource?: { version: string; count: number; fallbackCounts?: Record<string, number> }
-  iconSource?: { counts: Record<string, number> }
-  acquisitionSource?: { version: string; recipeCount: number }
+  aspectSource: { version: string; count: number }
 }
 
 export type Row = { id: number; aspect: string; amount: string }

@@ -46,10 +46,7 @@ export function AlternativesPanel({
                   <strong>{plan.title}</strong>
                   <small>
                     {plan.lines
-                      .map(
-                        ({ item, count }) =>
-                          `${count}× ${displayItemName(item.name)}${item.aspectVersion ? ` [${item.aspectVersion}]` : ''}`,
-                      )
+                      .map(({ item, count }) => `${count}× ${displayItemName(item.name)}`)
                       .join(' + ')}
                   </small>
                 </span>
