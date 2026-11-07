@@ -2,7 +2,7 @@
 
 GT New Horizons research map solver and essentia planner.
 
-**Live:** [thaumaspects.vercel.app](https://thaumaspects.vercel.app/)
+**Live:** [thaumaspects.com](https://thaumaspects.com/)
 
 ## What it does
 
@@ -27,12 +27,12 @@ Routes: `/` for Research Map, `/essentia` for Essentia Planner.
 ## Data
 
 - **Research graph:** 69 GTNH aspects, including addon aspects. Every compound connects to both recipe ingredients.
-- **GTNH 2.9.0 profiles:** 76,825 aspect-bearing item variants from the [immutable R2 snapshot](https://pub-9e5f1e92c9c34b2f8e16025b7fee2c1c.r2.dev/gtnh/2.9.0/20261107-050238-8e0e20e6/prepared/package-manifest.json). This is the planner's sole item source. Each variant keeps its exact registry ID and exact rendered icon when available. The export marks furnace acceptance as unknown; the planner includes every positive-aspect profile.
+- **GTNH 2.9.0 profiles:** 76,825 aspect-bearing item variants from an immutable R2 snapshot. This is the planner's sole item source. Each variant keeps its exact registry ID and exact rendered icon when available. The export marks furnace acceptance as unknown; the planner includes every positive-aspect profile.
 - **Item types:** the same export provides item class names used in the practical-source estimate. The site ships no local item catalog or item icons. Old favorite and unavailable keys migrate to stable GTNH 2.9.0 variant keys when a matching item exists. Unmatched saved keys remain stored so they are not silently lost.
 
 The catalog, manifest, and item types are fetched and parsed in a Web Worker. Recommendations and catalog searches run in another worker. The browser loads icons lazily from R2. In local development, a development-only route proxies the catalog files to avoid CORS configuration for `localhost`.
 
-Set `NEXT_PUBLIC_GT_DATASET_BASE_URL` to another immutable snapshot directory URL and rebuild to change the source. The public host must permit cross-origin GET requests from the deployed site. This variable is embedded at build time.
+Set `NEXT_PUBLIC_GT_DATASET_BASE_URL` to the immutable snapshot directory URL in `.env.local` for local development and in the Vercel Production environment for deployment. The URL is not committed; it is embedded in the browser bundle at build time. The host must permit cross-origin GET requests from the deployed site. Rebuild after changing the value.
 
 ## Research Map algorithms
 

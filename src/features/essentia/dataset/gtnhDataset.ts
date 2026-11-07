@@ -1,6 +1,4 @@
-export const GTNH_DATASET_BASE_URL =
-  process.env.NEXT_PUBLIC_GT_DATASET_BASE_URL?.trim() ||
-  'https://pub-9e5f1e92c9c34b2f8e16025b7fee2c1c.r2.dev/gtnh/2.9.0/20261107-050238-8e0e20e6/'
+export const GTNH_DATASET_BASE_URL = process.env.NEXT_PUBLIC_GT_DATASET_BASE_URL?.trim() || ''
 
 export type GtnhItemProfile = {
   id: string

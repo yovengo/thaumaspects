@@ -2,6 +2,10 @@ import { GTNH_DATASET_BASE_URL } from '@/features/essentia/dataset/gtnhDataset'
 import type { Catalog } from '@/features/essentia/model/types'
 
 export function loadGtnhCatalog(signal?: AbortSignal): Promise<Catalog> {
+  if (!GTNH_DATASET_BASE_URL) {
+    return Promise.reject(new Error('GTNH dataset URL is not configured'))
+  }
+
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./catalogLoader.worker.ts', import.meta.url))
     const cancel = () => {

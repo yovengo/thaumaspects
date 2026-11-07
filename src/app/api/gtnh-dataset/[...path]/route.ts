@@ -8,6 +8,7 @@ const allowed = new Set([
 
 export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   if (process.env.NODE_ENV !== 'development') return new Response(null, { status: 404 })
+  if (!GTNH_DATASET_BASE_URL) return new Response(null, { status: 503 })
   const path = (await params).path.join('/')
   if (!allowed.has(path)) return new Response(null, { status: 404 })
   const response = await fetch(`${GTNH_DATASET_BASE_URL.replace(/\/+$/, '')}/${path}`)
