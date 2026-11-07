@@ -1,4 +1,4 @@
-import { GTNH_DATASET_BASE_URL } from '@/features/essentia/dataset/gtnhDataset'
+import { GTNH_DATASET_BASE_URL } from '@/config/gtnh'
 
 const allowed = new Set([
   'prepared/package-manifest.json',

@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
+import { GTNH_DATASET_BASE_URL, GTNH_VERSION } from '@/config/gtnh'
 import { useItemAvailability } from '@/features/essentia/availability/useItemAvailability'
 import { useCatalogView } from '@/features/essentia/catalog/useCatalogView'
 import { loadGtnhCatalog } from '@/features/essentia/dataset/loadGtnhCatalog'
@@ -52,7 +53,7 @@ export function useEssentiaPlanner() {
     setExpandedItems,
   } = session
   const catalogQuery = useQuery({
-    queryKey: ['catalog', 'gtnh-2.9.0'],
+    queryKey: ['catalog', GTNH_VERSION, GTNH_DATASET_BASE_URL],
     queryFn: ({ signal }) => loadGtnhCatalog(signal),
     staleTime: Infinity,
     gcTime: Infinity,

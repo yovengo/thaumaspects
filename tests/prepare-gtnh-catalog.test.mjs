@@ -20,7 +20,7 @@ const observed = {
   ],
 }
 
-test('the prepared catalog contains only GTNH 2.9.0 profiles and exact icons', () => {
+test('the prepared catalog retains the source version and exact icons', () => {
   const catalog = prepareGtnhCatalog(
     observed,
     new Map([['minecraft:coal', 'net.minecraft.item.ItemCoal']]),
@@ -30,10 +30,19 @@ test('the prepared catalog contains only GTNH 2.9.0 profiles and exact icons', (
   assert.deepEqual(catalog.items[0].aspects, { ignis: 2, potentia: 2 })
   assert.equal(catalog.items[0].sourceClass, 'net.minecraft.item.ItemCoal')
   assert.equal(
-    catalog.items[0].icon.url,
+    catalog.items[0].iconUrl,
     `https://example.com/snapshot/raw/icons/${'a'.repeat(64)}.png`,
   )
   assert.equal(catalog.aspectSource.version, '2.9.0')
+})
+
+test('the prepared catalog uses the version from its source', () => {
+  const catalog = prepareGtnhCatalog(
+    { ...observed, source: { targetGtnhVersion: '2.10.0' } },
+    new Map(),
+    'https://example.com/snapshot/',
+  )
+  assert.equal(catalog.aspectSource.version, '2.10.0')
 })
 
 test('old favorites and exclusions migrate to stable variant keys once', () => {
@@ -54,6 +63,19 @@ test('changed legacy aspect profiles keep their saved preference', () => {
     ),
   )
   const [oldKey, newId] = Object.entries(aliases)[0]
-  const migrated = migratePreferences({ preferred: [oldKey], excluded: [], stage: 'NONE' }, [])
-  assert.deepEqual(migrated.preferred, [`gtnh:2.9.0:${newId}`])
+  const migrated = migratePreferences({ preferred: [oldKey], excluded: [], stage: 'NONE' }, [
+    { name: 'Legacy item', registryId: newId, aspects: { ignis: 1 } },
+  ])
+  assert.deepEqual(migrated.preferred, [`gtnh:item:${newId}`])
+})
+
+test('versioned preferences migrate by item ID and retain unmatched entries', () => {
+  const items = prepareGtnhCatalog(observed, new Map(), 'https://example.com').items
+  const saved = {
+    preferred: ['gtnh:2.9.0:minecraft:coal@0', 'gtnh:2.8.0:missing:item@0'],
+    excluded: [],
+    stage: 'NONE',
+  }
+  const migrated = migratePreferences(saved, items)
+  assert.deepEqual(migrated.preferred, [key(items[0]), 'gtnh:2.8.0:missing:item@0'])
 })

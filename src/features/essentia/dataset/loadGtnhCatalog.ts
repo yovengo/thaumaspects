@@ -1,9 +1,9 @@
-import { GTNH_DATASET_BASE_URL } from '@/features/essentia/dataset/gtnhDataset'
+import { GTNH_DATASET_BASE_URL, GTNH_VERSION } from '@/config/gtnh'
 import type { Catalog } from '@/features/essentia/model/types'
 
 export function loadGtnhCatalog(signal?: AbortSignal): Promise<Catalog> {
-  if (!GTNH_DATASET_BASE_URL) {
-    return Promise.reject(new Error('GTNH dataset URL is not configured'))
+  if (!GTNH_DATASET_BASE_URL || !GTNH_VERSION) {
+    return Promise.reject(new Error('GTNH dataset configuration is incomplete'))
   }
 
   return new Promise((resolve, reject) => {
@@ -30,12 +30,13 @@ export function loadGtnhCatalog(signal?: AbortSignal): Promise<Catalog> {
     }
     worker.onerror = () => {
       finish()
-      reject(new Error('Unable to load the GTNH 2.9.0 catalog'))
+      reject(new Error('Unable to load the GTNH catalog'))
     }
     worker.postMessage({
       dataBase:
         process.env.NODE_ENV === 'development' ? '/api/gtnh-dataset' : GTNH_DATASET_BASE_URL,
       iconBase: GTNH_DATASET_BASE_URL,
+      expectedVersion: GTNH_VERSION,
     })
   })
 }

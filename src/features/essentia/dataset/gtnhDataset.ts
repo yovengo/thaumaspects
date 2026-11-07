@@ -1,5 +1,3 @@
-export const GTNH_DATASET_BASE_URL = process.env.NEXT_PUBLIC_GT_DATASET_BASE_URL?.trim() || ''
-
 export type GtnhItemProfile = {
   id: string
   name: string
@@ -13,7 +11,7 @@ export type GtnhItemProfile = {
 
 export type GtnhCatalog = {
   schemaVersion: '1.0.0'
-  source: { runId: string; targetGtnhVersion: '2.9.0'; identityVersion: 1 }
+  source: { runId: string; targetGtnhVersion: string; identityVersion: 1 }
   aspects: string[]
   items: GtnhItemProfile[]
 }
@@ -21,19 +19,45 @@ export type GtnhCatalog = {
 export type GtnhManifest = {
   schemaVersion: '1.0.0'
   catalogItems: number
-  source: { runId: string; targetGtnhVersion: '2.9.0'; identityVersion: 1 }
+  source: GtnhCatalog['source']
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isNonnegativeAmount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
+
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 
 function validateSource(value: unknown): value is GtnhCatalog['source'] {
   return (
     isRecord(value) &&
     typeof value.runId === 'string' &&
     value.runId.length > 0 &&
-    value.targetGtnhVersion === '2.9.0' &&
+    typeof value.targetGtnhVersion === 'string' &&
+    value.targetGtnhVersion.length > 0 &&
     value.identityVersion === 1
+  )
+}
+
+function isItemProfile(value: unknown): value is GtnhItemProfile {
+  if (!isRecord(value) || !isRecord(value.aspects)) return false
+
+  const amounts = Object.values(value.aspects)
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.name === 'string' &&
+    typeof value.registryName === 'string' &&
+    typeof value.metadata === 'number' &&
+    Number.isSafeInteger(value.metadata) &&
+    amounts.some((amount) => typeof amount === 'number' && amount > 0) &&
+    amounts.every(isNonnegativeAmount) &&
+    (value.iconPath === null || typeof value.iconPath === 'string') &&
+    ['rendered', 'cached', 'empty', 'error'].includes(String(value.iconStatus)) &&
+    typeof value.smeltability === 'string'
   )
 }
 
@@ -42,8 +66,7 @@ export function parseGtnhManifest(value: unknown): GtnhManifest {
     !isRecord(value) ||
     value.schemaVersion !== '1.0.0' ||
     !validateSource(value.source) ||
-    !Number.isSafeInteger(value.catalogItems) ||
-    (value.catalogItems as number) <= 0
+    !isPositiveInteger(value.catalogItems)
   ) {
     throw new Error('Unsupported GTNH dataset manifest')
   }
@@ -56,6 +79,7 @@ export function parseGtnhCatalog(value: unknown, manifest: GtnhManifest): GtnhCa
     value.schemaVersion !== '1.0.0' ||
     !validateSource(value.source) ||
     value.source.runId !== manifest.source.runId ||
+    value.source.targetGtnhVersion !== manifest.source.targetGtnhVersion ||
     !Array.isArray(value.aspects) ||
     !value.aspects.every((aspect) => typeof aspect === 'string') ||
     !Array.isArray(value.items) ||
@@ -66,23 +90,7 @@ export function parseGtnhCatalog(value: unknown, manifest: GtnhManifest): GtnhCa
 
   const ids = new Set<string>()
   for (const item of value.items) {
-    if (
-      !isRecord(item) ||
-      typeof item.id !== 'string' ||
-      !item.id ||
-      ids.has(item.id) ||
-      typeof item.name !== 'string' ||
-      typeof item.registryName !== 'string' ||
-      !Number.isSafeInteger(item.metadata) ||
-      !isRecord(item.aspects) ||
-      !Object.values(item.aspects).some((amount) => typeof amount === 'number' && amount > 0) ||
-      !Object.values(item.aspects).every(
-        (amount) => typeof amount === 'number' && Number.isFinite(amount) && amount >= 0,
-      ) ||
-      (item.iconPath !== null && typeof item.iconPath !== 'string') ||
-      !['rendered', 'cached', 'empty', 'error'].includes(String(item.iconStatus)) ||
-      typeof item.smeltability !== 'string'
-    ) {
+    if (!isItemProfile(item) || ids.has(item.id)) {
       throw new Error('GTNH dataset contains an invalid item profile')
     }
     ids.add(item.id)

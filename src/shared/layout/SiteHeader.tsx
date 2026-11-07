@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { GTNH_VERSION } from '@/config/gtnh'
 import AuthControl from '@/features/auth/AuthControl'
 
 export function SiteHeader() {
@@ -40,7 +41,7 @@ export function SiteHeader() {
       <div className="site-actions">
         <span className="site-version">
           <small>GTNH</small>
-          <strong>2.9.0-beta-2</strong>
+          {GTNH_VERSION && <strong>{GTNH_VERSION}</strong>}
         </span>
         <AuthControl />
       </div>

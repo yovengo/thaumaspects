@@ -37,6 +37,20 @@ test('GTNH catalog retains exact variants with the same display name', () => {
   assert.equal(gtnhIconUrl('https://example.com/snapshot/', catalog.items[1]), null)
 })
 
+test('GTNH catalog accepts another version when its manifest matches', () => {
+  const newerSource = { ...source, targetGtnhVersion: '2.10.0' }
+  const newerManifest = parseGtnhManifest({
+    schemaVersion: '1.0.0',
+    source: newerSource,
+    catalogItems: 2,
+  })
+  const catalog = parseGtnhCatalog(
+    { schemaVersion: '1.0.0', source: newerSource, aspects: ['ignis'], items: [first, second] },
+    newerManifest,
+  )
+  assert.equal(catalog.source.targetGtnhVersion, '2.10.0')
+})
+
 test('GTNH catalog accepts zero entries in an otherwise positive aspect profile', () => {
   const catalog = parseGtnhCatalog(
     {
@@ -56,6 +70,17 @@ test('GTNH catalog rejects mismatched snapshots and malformed icon paths', () =>
       {
         schemaVersion: '1.0.0',
         source: { ...source, runId: 'other' },
+        aspects: ['ignis'],
+        items: [first, second],
+      },
+      manifest,
+    ),
+  )
+  assert.throws(() =>
+    parseGtnhCatalog(
+      {
+        schemaVersion: '1.0.0',
+        source: { ...source, targetGtnhVersion: '2.8.0' },
         aspects: ['ignis'],
         items: [first, second],
       },

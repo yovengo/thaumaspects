@@ -177,14 +177,16 @@ export function CatalogPanel({
             Show 30 more <span>↓</span>
           </button>
         )}
-        <details className="ess-data-note">
-          <summary>Data source</summary>
-          <p>
-            {catalog?.aspectSource?.count.toLocaleString('en-US') ?? '—'} aspect profiles from GTNH
-            2.9.0. Item difficulty is estimated from item type and aspect concentration. The export
-            does not verify individual Alchemical Furnace acceptance.
-          </p>
-        </details>
+        {catalog && (
+          <details className="ess-data-note">
+            <summary>Data source</summary>
+            <p>
+              {catalog.aspectSource.count.toLocaleString('en-US')} aspect profiles from GTNH{' '}
+              {catalog.aspectSource.version}. Item difficulty is estimated from item type and aspect
+              concentration. The export does not verify individual Alchemical Furnace acceptance.
+            </p>
+          </details>
+        )}
       </div>
     </section>
   )

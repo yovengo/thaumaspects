@@ -21,18 +21,25 @@ Routes: `/` for Research Map, `/essentia` for Essentia Planner.
 | Async state and forms | TanStack Query, React Hook Form |
 | Compute | Web Workers for board solving, planner search, and screenshot recognition |
 | Computer vision | OpenCV.js; image processing and template matching in the browser |
-| Storage | Cloudflare R2 item profiles and icons; optional PostgreSQL on Supabase for accounts and preferences |
+| Storage | Cloudflare R2 with a CDN domain for item profiles and icons; optional PostgreSQL on Supabase for accounts and preferences |
 | Tooling | pnpm, Biome, Node test runner, Vercel Analytics |
 
 ## Data
 
 - **Research graph:** 69 GTNH aspects, including addon aspects. Every compound connects to both recipe ingredients.
-- **GTNH 2.9.0 profiles:** 76,825 aspect-bearing item variants from an immutable R2 snapshot. This is the planner's sole item source. Each variant keeps its exact registry ID and exact rendered icon when available. The export marks furnace acceptance as unknown; the planner includes every positive-aspect profile.
-- **Item types:** the same export provides item class names used in the practical-source estimate. The site ships no local item catalog or item icons. Old favorite and unavailable keys migrate to stable GTNH 2.9.0 variant keys when a matching item exists. Unmatched saved keys remain stored so they are not silently lost.
+- **GTNH profiles:** aspect-bearing item variants from the configured immutable R2 snapshot. This is the planner's sole item source. Each variant keeps its exact registry ID and rendered icon when available. The export marks furnace acceptance as unknown; the planner includes every positive-aspect profile.
+- **Item types:** the same export provides item class names used in the practical-source estimate. The site ships no local item catalog or item icons. Favorite and unavailable keys use version-independent variant IDs. Older keys migrate when a matching item exists; unmatched keys remain stored.
 
-The catalog, manifest, and item types are fetched and parsed in a Web Worker. Recommendations and catalog searches run in another worker. The browser loads icons lazily from R2. In local development, a development-only route proxies the catalog files to avoid CORS configuration for `localhost`.
+The catalog, manifest, and item types are fetched and parsed in a Web Worker. Recommendations and catalog searches run in another worker. The browser loads icons lazily from the CDN. In local development, a development-only route proxies the catalog files to avoid CORS configuration for `localhost`.
 
-Set `NEXT_PUBLIC_GT_DATASET_BASE_URL` to the immutable snapshot directory URL in `.env.local` for local development and in the Vercel Production environment for deployment. The URL is not committed; it is embedded in the browser bundle at build time. The host must permit cross-origin GET requests from the deployed site. Rebuild after changing the value.
+Set these variables in `.env.local` for local development and in the Vercel Production environment for deployment:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_GT_VERSION` | GTNH version shown in the header and checked against the dataset manifest |
+| `NEXT_PUBLIC_GT_DATASET_BASE_URL` | Immutable CDN snapshot directory URL, including the export run ID |
+
+Both values are embedded in the browser bundle at build time, so changing either requires a new deployment. The CDN must permit cross-origin GET requests from the deployed site. The research aspect graph is maintained separately from the item export; check it when switching GTNH versions.
 
 ## Research Map algorithms
 
@@ -92,7 +99,7 @@ Run the [SQL migrations](supabase/migrations) in order in a Supabase project. Th
 | `DATABASE_URL` | PostgreSQL pooler URI with a URL-encoded password and `sslmode=verify-full` |
 | `DATABASE_CA_CERT_BASE64` | Base64-encoded Supabase server root certificate |
 | `AUTH_CODE_SECRET` | Stable random secret, at least 32 characters; changing it invalidates existing access codes |
-| `APP_ORIGIN` | Exact public origin, for example `https://thaumaspects.vercel.app` |
+| `APP_ORIGIN` | Exact public origin, for example `https://thaumaspects.com` |
 
 Access codes are the account credential. The server stores a keyed code digest, an encrypted copy for signed-in recovery, and session-token hashes. Without a database, local item preferences still work.
 

@@ -39,7 +39,7 @@ export function key(item: ItemAspect) {
   const cached = keyCache.get(item)
   if (cached !== undefined) return cached
   const value = item.registryId
-    ? `gtnh:2.9.0:${item.registryId}`
+    ? `gtnh:item:${item.registryId}`
     : `${item.name}|${Object.entries(item.aspects)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([aspect, amount]) => `${aspect}:${amount}`)

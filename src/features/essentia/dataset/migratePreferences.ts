@@ -3,7 +3,12 @@ import type { ItemAspect } from '../model/plannerTypes.ts'
 import type { Availability } from '../model/types.ts'
 import legacyAliases from './legacyPreferenceAliases.json' with { type: 'json' }
 
-const legacyKeys = new WeakMap<ItemAspect[], Map<string, string>>()
+type PreferenceKeys = {
+  byLegacyId: Map<string, string>
+  currentIds: Set<string>
+}
+
+const preferenceKeyCache = new WeakMap<ItemAspect[], PreferenceKeys>()
 
 function oldKey(item: ItemAspect): string {
   return `${item.registryId}|${Object.entries(item.aspects)
@@ -13,17 +18,25 @@ function oldKey(item: ItemAspect): string {
 }
 
 export function migratePreferences(availability: Availability, items: ItemAspect[]): Availability {
-  let current = legacyKeys.get(items)
-  if (!current) {
-    current = new Map(items.map((item) => [oldKey(item), key(item)]))
-    legacyKeys.set(items, current)
+  let keys = preferenceKeyCache.get(items)
+  if (!keys) {
+    keys = {
+      byLegacyId: new Map(items.map((item) => [oldKey(item), key(item)])),
+      currentIds: new Set(items.map((item) => item.registryId).filter((id): id is string => !!id)),
+    }
+    preferenceKeyCache.set(items, keys)
   }
   const aliases = legacyAliases as Record<string, string>
   const migrate = (saved: string[]) => [
     ...new Set(
       saved.map((id) => {
         const oldId = aliases[id]
-        return oldId ? `gtnh:2.9.0:${oldId}` : (current.get(id) ?? id)
+        if (oldId && keys.currentIds.has(oldId)) return `gtnh:item:${oldId}`
+
+        const versionedId = /^gtnh:[^:]+:(.+)$/.exec(id)?.[1]
+        if (versionedId && keys.currentIds.has(versionedId)) return `gtnh:item:${versionedId}`
+
+        return keys.byLegacyId.get(id) ?? id
       }),
     ),
   ]

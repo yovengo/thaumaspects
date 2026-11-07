@@ -17,7 +17,7 @@ export function prepareGtnhCatalog(
       aspects: Object.fromEntries(
         Object.entries(profile.aspects).filter(([, amount]) => amount > 0),
       ),
-      icon: iconUrl ? { kind: 'remote', url: iconUrl, quality: 'exact' } : undefined,
+      iconUrl: iconUrl ?? undefined,
     }
   })
 

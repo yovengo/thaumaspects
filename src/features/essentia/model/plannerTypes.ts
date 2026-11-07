@@ -1,8 +1,7 @@
-export type ItemIconData = { kind: 'remote'; url: string; quality: 'exact' }
 export type ItemAspect = {
   name: string
   aspects: Record<string, number>
-  icon?: ItemIconData
+  iconUrl?: string
   registryId?: string
   sourceClass?: string
 }
