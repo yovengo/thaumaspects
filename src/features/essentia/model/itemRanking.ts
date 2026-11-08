@@ -12,7 +12,7 @@ function sourceEffort(item: ItemAspect): number {
   const itemClass = item.sourceClass ?? ''
   const simpleItem =
     /Item(?:Resin|Crop|Seed|Berry|Fruit|Sapling|Reed)$/.test(itemClass) ||
-    (minecraft && !/(?:ItemBlock|ItemPiston|ItemColored|ItemDoublePlant|DoorItem)$/.test(itemClass))
+    (minecraft && !/(?:ItemPiston|ItemColored|ItemDoublePlant|DoorItem)$/.test(itemClass))
   let effort = simpleItem ? 1 + 0.18 * totalAspects ** 1.35 : 12 + 0.55 * totalAspects ** 1.45
 
   if (/Item(?:Potion|EnchantedBook|Record|Armor|Sword|Tool|Bow)/.test(itemClass)) effort += 40

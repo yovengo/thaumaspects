@@ -64,3 +64,43 @@ test('favorite and unavailable keys use the stable GTNH variant ID', () => {
   const excluded = buildPlans(items, required, { excluded: new Set([key(coal)]) })
   assert.ok(excluded[0].lines.every(({ item }) => key(item) !== key(coal)))
 })
+
+test('the practical plan prefers favorites and avoids byproducts between favorite sources', () => {
+  const stone = {
+    name: 'Stone',
+    registryId: 'minecraft:stone@0',
+    aspects: { terra: 2 },
+    sourceClass: 'net.minecraft.item.ItemBlock',
+  }
+  const clay = {
+    name: 'Clay',
+    registryId: 'minecraft:clay_ball@0',
+    aspects: { terra: 1, aqua: 1 },
+    sourceClass: 'net.minecraft.item.Item',
+  }
+  const dirt = {
+    name: 'Dirt',
+    registryId: 'minecraft:dirt@0',
+    aspects: { terra: 2 },
+    sourceClass: 'net.minecraft.item.ItemMultiTexture',
+  }
+  const required = { terra: 16 }
+  const preferred = new Set([key(stone), key(clay)])
+  const plans = buildPlans([stone, clay, dirt], required, { preferred })
+  assert.deepEqual(
+    plans[0].lines.map(({ item, count }) => [item.name, count]),
+    [['Stone', 8]],
+  )
+  assert.equal(plans[0].extra, 0)
+
+  const clayOnly = buildPlans([stone, clay, dirt], required, {
+    preferred: new Set([key(clay)]),
+  })
+  assert.equal(clayOnly[0].lines[0].item.name, 'Clay')
+
+  const excludedFavorite = buildPlans([stone, clay, dirt], required, {
+    preferred,
+    excluded: new Set([key(stone)]),
+  })
+  assert.equal(excludedFavorite[0].lines[0].item.name, 'Clay')
+})

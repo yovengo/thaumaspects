@@ -11,7 +11,23 @@ export function buildPlans(
   if (!Object.values(required).some((amount) => amount > 0)) return []
   const aspects = Object.keys(required).filter((aspect) => required[aspect] > 0)
   const seed = favoritePlan && new Map(favoritePlan.lines.map(({ item, count }) => [item, count]))
-  const simple = makePlan(items, required, 'Practical items', 'simple', preferences, seed)
+  const favoriteItems = preferences.preferred?.size
+    ? items.filter((item) => {
+        const id = key(item)
+        return preferences.preferred?.has(id) && !preferences.excluded?.has(id)
+      })
+    : []
+  const favoritesCoverTarget = aspects.every((aspect) =>
+    favoriteItems.some((item) => (item.aspects[aspect] ?? 0) > 0),
+  )
+  const simple = makePlan(
+    favoritesCoverTarget ? favoriteItems : items,
+    required,
+    'Practical items',
+    'simple',
+    preferences,
+    seed,
+  )
   const clean = makePlan(items, required, 'Less excess essentia', 'clean', preferences)
   const totalNeeded = Object.values(required).reduce((sum, amount) => sum + Math.max(0, amount), 0)
   const fewest = makePlan(items, required, 'Fewest items', 'fewest', preferences)
