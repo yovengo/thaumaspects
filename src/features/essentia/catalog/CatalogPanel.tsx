@@ -1,7 +1,9 @@
 'use client'
 
+import { useLayoutEffect, useRef } from 'react'
 import { CatalogItem } from '@/features/essentia/catalog/CatalogItem'
 import { SavedSources } from '@/features/essentia/catalog/SavedSources'
+import { useFavoriteFlight } from '@/features/essentia/catalog/useFavoriteFlight'
 import { key as itemKey } from '@/features/essentia/model/planner'
 import type { CatalogSort } from '@/features/essentia/model/types'
 import { CatalogIcon, Chevron } from '@/features/essentia/shared/icons'
@@ -16,6 +18,7 @@ export function CatalogPanel({
   const {
     catalogOpen,
     setCatalogOpen,
+    catalogRequest,
     catalog,
     loadError,
     catalogSearchRef,
@@ -33,6 +36,43 @@ export function CatalogPanel({
     visibleCount,
     catalogRef,
   } = controller
+  const startFavoriteFlight = useFavoriteFlight(catalogSearching, catalogRequest)
+  const listRef = useRef<HTMLDivElement>(null)
+  const moreAnchor = useRef<{
+    row: HTMLElement | null
+    top: number
+    previousCount: number
+    keyboard: boolean
+  } | null>(null)
+
+  useLayoutEffect(() => {
+    const anchor = moreAnchor.current
+    if (!anchor || visibleCount <= anchor.previousCount) return
+    moreAnchor.current = null
+    if (anchor.row?.isConnected) {
+      const shift = anchor.row.getBoundingClientRect().top - anchor.top
+      if (Math.abs(shift) > 0.5) window.scrollBy({ top: shift, behavior: 'instant' })
+    }
+    if (anchor.keyboard) {
+      const nextRow = listRef.current?.children[anchor.previousCount] as HTMLElement | undefined
+      nextRow
+        ?.querySelector<HTMLElement>('.ess-catalog-action button, .ess-availability-button')
+        ?.focus({ preventScroll: true })
+    }
+  }, [visibleCount])
+
+  const showMore = (button: HTMLButtonElement, keyboard: boolean) => {
+    const row = listRef.current?.lastElementChild as HTMLElement | null
+    moreAnchor.current = {
+      row,
+      top: row?.getBoundingClientRect().top ?? 0,
+      previousCount: visibleCount,
+      keyboard,
+    }
+    if (!keyboard) button.blur()
+    setVisibleCount((count) => count + 30)
+  }
+
   return (
     <section
       className={`panel ess-catalog ${catalogOpen ? 'is-open' : ''}`}
@@ -155,9 +195,14 @@ export function CatalogPanel({
             </span>
           )}
         </div>
-        <div className="ess-catalog-list">
+        <div className="ess-catalog-list" ref={listRef}>
           {matchesShown.map((item) => (
-            <CatalogItem key={itemKey(item)} item={item} controller={controller} />
+            <CatalogItem
+              key={itemKey(item)}
+              item={item}
+              controller={controller}
+              onFavoriteAdd={startFavoriteFlight}
+            />
           ))}
           {catalog && catalogSearching && filteredItems.length === 0 && (
             <p className="ess-no-results">Searching items…</p>
@@ -172,7 +217,7 @@ export function CatalogPanel({
           <button
             className="ess-show-more"
             type="button"
-            onClick={() => setVisibleCount((count) => count + 30)}
+            onClick={(event) => showMore(event.currentTarget, event.detail === 0)}
           >
             Show 30 more <span>↓</span>
           </button>

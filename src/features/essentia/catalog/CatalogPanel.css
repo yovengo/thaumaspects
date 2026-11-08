@@ -165,6 +165,7 @@
 .ess-catalog-list {
   display: grid;
   border-top: 1px solid var(--edge);
+  overflow-anchor: none;
 }
 
 .ess-catalog-item {
@@ -174,6 +175,19 @@
   min-width: 0;
   padding: 9px 4px;
   border-bottom: 1px solid var(--edge);
+}
+
+.ess-catalog-item.is-departing {
+  opacity: 0.35;
+}
+
+.ess-catalog-flying-copy {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  border-radius: 7px;
+  background: var(--surface2);
+  box-shadow: 0 8px 24px #0005;
 }
 
 .ess-catalog-item-body {
@@ -279,6 +293,7 @@
 }
 
 .ess-show-more {
+  overflow-anchor: none;
   width: 100%;
   min-height: 42px;
   margin-top: 11px;

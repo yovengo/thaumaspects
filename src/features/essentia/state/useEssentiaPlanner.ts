@@ -304,6 +304,7 @@ export function useEssentiaPlanner() {
     catalog: {
       catalogOpen,
       setCatalogOpen,
+      catalogRequest,
       catalog,
       loadError,
       catalogSearchRef,

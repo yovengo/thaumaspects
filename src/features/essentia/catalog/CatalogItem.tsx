@@ -11,9 +11,11 @@ import type { useEssentiaPlanner } from '@/features/essentia/state/useEssentiaPl
 export function CatalogItem({
   item,
   controller,
+  onFavoriteAdd,
 }: {
   item: ItemAspect
   controller: ReturnType<typeof useEssentiaPlanner>['catalog']
+  onFavoriteAdd: (row: HTMLElement) => void
 }) {
   const {
     requestedAspects,
@@ -101,7 +103,15 @@ export function CatalogItem({
               ? 'Remove abundant item mark'
               : 'Have plenty — prefer in recommendations'
         }
-        onClick={() => (isExcluded ? restoreItem(item) : preferItem(item))}
+        onClick={(event) => {
+          if (isExcluded) {
+            restoreItem(item)
+            return
+          }
+          if (!isPreferred && event.currentTarget.parentElement)
+            onFavoriteAdd(event.currentTarget.parentElement)
+          preferItem(item)
+        }}
       >
         {isExcluded ? <span aria-hidden="true">↶</span> : <StarIcon filled={isPreferred} />}
       </button>
