@@ -7,7 +7,7 @@ GT New Horizons research map solver and essentia planner.
 ## What it does
 
 - **Research Map:** place source aspects and obstacles on a hex board, then connect the sources automatically. Quick Search finds an aspect chain without a board.
-- **Essentia Planner:** enter the required aspects and quantities; get furnace items, essentia balance, alternative mixes, and a searchable item catalog. Build a mix manually or return to the recommendation.
+- **Essentia Planner:** enter aspects or choose an infusion recipe; get furnace items, essentia balance, alternative mixes, and a searchable item catalog. Build a mix manually or return to the recommendation.
 - **Screenshot import (beta):** recognize a GTNH research screenshot, review the detected cells, and import them into the board.
 - **Preferences:** mark favorite or unavailable items. Access-code accounts optionally sync these lists between devices; anonymous preferences stay in the browser.
 
@@ -29,6 +29,7 @@ Routes: `/` for Research Map, `/essentia` for Essentia Planner.
 - **Research graph:** 69 GTNH aspects, including addon aspects. Every compound connects to both recipe ingredients.
 - **GTNH profiles:** aspect-bearing item variants from the configured immutable R2 snapshot. This is the planner's sole item source. Each variant keeps its exact registry ID and rendered icon when available. The export marks furnace acceptance as unknown; the planner includes every positive-aspect profile.
 - **Item types:** the same export provides item class names used in the practical-source estimate. The site ships no local item catalog or item icons. Favorite and unavailable keys use version-independent variant IDs. Older keys migrate when a matching item exists; unmatched keys remain stored.
+- **Infusion recipes:** `scripts/build-infusion-recipes.py` joins raw Thaumcraft infusion records to item names and icons from the same export run. The resulting `prepared/infusion-recipes.json` is fetched only when the recipe picker opens. Recipes with unresolved outputs, unsupported custom aspects, or incomplete aspect costs are omitted.
 
 The catalog, manifest, and item types are fetched and parsed in a Web Worker. Recommendations and catalog searches run in another worker. The browser loads icons lazily from the CDN. In local development, a development-only route proxies the catalog files to avoid CORS configuration for `localhost`.
 
@@ -103,7 +104,7 @@ Run the [SQL migrations](supabase/migrations) in order in a Supabase project. Th
 
 Access codes are the account credential. The server stores a keyed code digest, an encrypted copy for signed-in recovery, and session-token hashes. Without a database, local item preferences still work.
 
-The `scripts/` directory contains the previous Oracle and icon generation tools. They are not part of the active catalog loading path.
+The only data preparation script is `scripts/build-infusion-recipes.py`; it builds the infusion recipe index from a matching raw and prepared export snapshot.
 
 ## Attribution
 

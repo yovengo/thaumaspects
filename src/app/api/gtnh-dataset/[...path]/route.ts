@@ -3,6 +3,7 @@ import { GTNH_DATASET_BASE_URL } from '@/config/gtnh'
 const allowed = new Set([
   'prepared/package-manifest.json',
   'prepared/aspect-catalog.json.gz',
+  'prepared/infusion-recipes.json',
   'raw/item-types-00001.jsonl.gz',
 ])
 

@@ -1,8 +1,11 @@
 'use client'
 
+import { useState } from 'react'
+import { RecipePicker } from '@/features/essentia/recipes/RecipePicker'
 import { aspectLabel } from '@/features/essentia/shared/format'
 import type { useEssentiaPlanner } from '@/features/essentia/state/useEssentiaPlanner'
 import { AspectPicker } from '@/features/essentia/target/AspectPicker'
+import { MAX_TARGET_AMOUNT } from '@/features/essentia/target/useTargetRows'
 
 export function TargetPanel({
   controller,
@@ -18,11 +21,16 @@ export function TargetPanel({
     changeAmount,
     removeRow,
     addRow,
+    applyRecipe,
   } = controller
+  const [recipePickerOpen, setRecipePickerOpen] = useState(false)
   return (
     <div className="panel ess-requirements">
       <div className="ess-section-head">
         <h3>Target</h3>
+        <button className="ess-from-recipe" type="button" onClick={() => setRecipePickerOpen(true)}>
+          From recipe
+        </button>
       </div>
       <div className="ess-compose">
         <div className="ess-compose-aspects">
@@ -71,7 +79,7 @@ export function TargetPanel({
                       onChange={(event) => changeAmount(row.id, event.target.value)}
                       onBlur={() =>
                         updateRow(row.id, {
-                          amount: String(Math.min(1000, Number(row.amount) || 0)),
+                          amount: String(Math.min(MAX_TARGET_AMOUNT, Number(row.amount) || 0)),
                         })
                       }
                       onKeyDown={(event) => {
@@ -83,7 +91,7 @@ export function TargetPanel({
                     />
                     <button
                       type="button"
-                      disabled={Number(row.amount) >= 1000}
+                      disabled={Number(row.amount) >= MAX_TARGET_AMOUNT}
                       aria-label={`Increase ${aspectLabel(row.aspect)} amount`}
                       onClick={() => stepAmount(row, 1)}
                     >
@@ -123,6 +131,9 @@ export function TargetPanel({
           )}
         </div>
       </div>
+      {recipePickerOpen && (
+        <RecipePicker onClose={() => setRecipePickerOpen(false)} onSelect={applyRecipe} />
+      )}
     </div>
   )
 }

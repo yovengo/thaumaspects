@@ -112,6 +112,7 @@ export function useEssentiaPlanner() {
     stepAmount,
     addRow,
     removeRow,
+    applyRecipe,
   } = useTargetRows(session, catalog)
   const activeCatalogFilter = requestedAspects.length === 0 ? 'allItems' : catalogFilter
   const preferences = useMemo(
@@ -255,6 +256,7 @@ export function useEssentiaPlanner() {
       changeAmount,
       removeRow,
       addRow,
+      applyRecipe,
     },
     furnace: {
       calculating,

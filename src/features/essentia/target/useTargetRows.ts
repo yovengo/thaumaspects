@@ -3,7 +3,10 @@
 import { useMemo } from 'react'
 import type { Requirement } from '@/features/essentia/model/planner'
 import type { Catalog, Row } from '@/features/essentia/model/types'
+import type { InfusionRecipe } from '@/features/essentia/recipes/infusionRecipes'
 import type { usePlannerSession } from '@/features/essentia/state/usePlannerSession'
+
+export const MAX_TARGET_AMOUNT = 9999
 
 export function useTargetRows(
   session: ReturnType<typeof usePlannerSession>,
@@ -30,12 +33,27 @@ export function useTargetRows(
     setRows((previous) => previous.map((row) => (row.id === id ? { ...row, ...change } : row)))
   const changeAmount = (id: number, value: string) => {
     if (!/^\d{0,4}$/.test(value)) return
-    updateRow(id, { amount: value && Number(value) > 1000 ? '1000' : value })
+    updateRow(id, {
+      amount: value && Number(value) > MAX_TARGET_AMOUNT ? String(MAX_TARGET_AMOUNT) : value,
+    })
   }
   const stepAmount = (row: Row, direction: number) =>
     updateRow(row.id, {
-      amount: String(Math.max(0, Math.min(1000, (Number(row.amount) || 0) + direction))),
+      amount: String(
+        Math.max(0, Math.min(MAX_TARGET_AMOUNT, (Number(row.amount) || 0) + direction)),
+      ),
     })
+  const applyRecipe = (recipe: InfusionRecipe) => {
+    const nextRows = Object.entries(recipe.aspects).map(([aspect, amount], index) => ({
+      id: nextId + index,
+      aspect,
+      amount: String(amount),
+    }))
+    setRows(nextRows)
+    setNextId((value) => value + nextRows.length)
+    setSelectedId(null)
+    setCustomLines([])
+  }
   const addRow = () => {
     if (rows.some((row) => !row.aspect) || rows.length >= availableAspects.length) return
     setRows((previous) => [...previous, { id: nextId, aspect: '', amount: '1' }])
@@ -59,5 +77,6 @@ export function useTargetRows(
     stepAmount,
     addRow,
     removeRow,
+    applyRecipe,
   }
 }
